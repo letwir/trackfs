@@ -50,7 +50,7 @@ class Factory:
         separator_rex = self.track_separator.replace('.','\\.')
         track_exentension_rex = self.track_extension.replace('.','\\.')
         flac_cue_rex = (
-            '^(?P<basename>.*)'+self.album_extension+')'+separator_rex
+            '^(?P<basename>.*)(?P<extension>'+self.album_extension+')'+separator_rex
             + '(?P<num>\\d+)(?P<title>(\\.[^\\.]{,'+str(self.max_title_len)
             + '}?)?)'+track_exentension_rex+'$'
         )
@@ -128,7 +128,7 @@ class FusePath:
     def vpath(self):
         if(self.is_track): 
             return (
-                f'{self.source_root}{self.track_separator}{self.num:03d}'
+                f'{self.source_root}{self.extension}{self.track_separator}{self.num:03d}'
                 f'{self.title_fragment}{self.track_extension}'
             )
         else:  
