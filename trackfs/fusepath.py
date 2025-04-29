@@ -128,7 +128,7 @@ class FusePath:
     def vpath(self):
         if(self.is_track): 
             return (
-                f'{self.source_root}{self.extension}{self.track_separator}{self.num:03d}'
+                f'{self.source_root}{self.track_separator}{self.num:03d}'
                 f'{self.title_fragment}{self.track_extension}'
             )
         else:  
