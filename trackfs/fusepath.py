@@ -122,7 +122,7 @@ class FusePath:
             return ""
         else:
             clean_title = unicodedata.normalize('NFKD', self.title)[:self.max_title_len]
-            return "."+''.join("_" if c in '[\\/:*?"<>|]+' else c for c in clean_title)
+            return "."+''.join("_" if c in '[]\\/:*?%&$\'`"<>|+' else c for c in clean_title)
         
     @property
     def vpath(self):
