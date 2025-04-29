@@ -50,7 +50,7 @@ class Factory:
         separator_rex = self.track_separator.replace('.','\\.')
         track_exentension_rex = self.track_extension.replace('.','\\.')
         flac_cue_rex = (
-            '^(?P<basename>.*)(?P<extension>'+self.album_extension+')'+separator_rex
+            '^(?P<basename>.*)'+self.album_extension+')'+separator_rex
             + '(?P<num>\\d+)(?P<title>(\\.[^\\.]{,'+str(self.max_title_len)
             + '}?)?)'+track_exentension_rex+'$'
         )
