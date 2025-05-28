@@ -1,6 +1,15 @@
 
-`trackfs`
-=======
+`trackfs_fork  `
+=======  
+Unicode対応、flac1.5.0にあわせて変更を施したtrackfsです。  
+```
+pip install git+https://github.com/letwir/trackfs/
+```
+or
+```
+pipx install git+https://github.com/letwir/trackfs/
+```
+でインストールできます。
 
 `trackfs` is a read-only FUSE filesystem that splits audio files that contain full albums into individual FLAC files per track.
 
