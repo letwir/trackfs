@@ -178,10 +178,13 @@ class TrackManager:
                 picture_arg = f' --picture="{local_album_art}"'
 
         track = album_info.track(fp.num)
+        #  flac1.5.0に最適化
+        #  decodeに" --cue=[#.#][-[#.#]] " //Set the beginning and ending cuepoints to decodeを利用したい
+        #  encodeにマルチスレッド機能を仮実装 " -j XX "
         flac_cmd = (
-            f'flac -d --silent --stdout --skip={track.start.flac_time()}'
+            f'flac -d -s -c -F --skip={track.start.flac_time()}'
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f'| flac --silent -f --fast'
+            f'| flac -s -f -0 -j 16'
             f'  {self.track_tags_as_flac_args(album_info,fp.num)}{picture_arg} -o {track_file} -'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
