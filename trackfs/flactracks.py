@@ -28,7 +28,8 @@ from .cuesheet import Track
 import logging
 
 log = logging.getLogger(__name__)
-
+# CPU論理コア数の格納。
+cpu_cores = str(psutil.cpu_count())
 
 class FlacSplitException(Exception):
     pass
@@ -185,7 +186,7 @@ class TrackManager:
         flac_cmd = (
             f'flac -d -s -c -F --skip={track.start.flac_time()}'
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f'| flac -s -f -0 -j {psutil.cpu_count()}'
+            f'| flac -s -f -0 -j {cpu_cores}'
             f'  {self.track_tags_as_flac_args(album_info,fp.num)}{picture_arg} -o {track_file} -'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
