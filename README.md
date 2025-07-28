@@ -6,7 +6,8 @@ Unicode対応、flac1.5.0にあわせて変更を施したtrackfsです。
 pip install git+https://github.com/letwir/trackfs/
 ```
 or
-```
+```  
+pipx inject trackfs psutil  
 pipx install git+https://github.com/letwir/trackfs/
 ```
 でインストールできます。
