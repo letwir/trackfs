@@ -183,10 +183,11 @@ class TrackManager:
         #  flac1.5.0に最適化
         #  decodeに" --cue=[#.#][-[#.#]] " //Set the beginning and ending cuepoints to decodeを利用したい
         #  encodeにマルチスレッド機能を仮実装 " -j XX "
+        #  論理コアをpsutilで取得して使っている。
         flac_cmd = (
-            f'flac -d -s -c -F --skip={track.start.flac_time()}'
+            f'flac -dscF --skip={track.start.flac_time()}'
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f'| flac -s -f -0 -j {cpu_cores}'
+            f'| flac -sf0j {cpu_cores}'
             f'  {self.track_tags_as_flac_args(album_info,fp.num)}{picture_arg} -o {track_file} -'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
@@ -229,7 +230,7 @@ class TrackManager:
             nframes = trunc(track.duration.seconds() * params.framerate)
             with wave.open(wave_track_file, 'w') as wav_out:
                 out_params = (params.nchannels, params.sampwidth, params.framerate,
-                              nframes, params.comptype, params.compname)
+                                nframes, params.comptype, params.compname)
                 wav_out.setparams(out_params)
                 chunk_size = 512*1025
                 while nframes > 0:
@@ -237,7 +238,7 @@ class TrackManager:
                     nframes -= chunk_size
 
         flac_cmd = (
-            f'flac --silent -f --fast'
+            f'flac -sf0j {cpu_cores}'
             f'  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o "{track_file}" "{wave_track_file}"'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')

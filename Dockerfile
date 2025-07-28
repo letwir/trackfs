@@ -11,9 +11,21 @@
 
 FROM docker.io/python:3.8-alpine as builder
 
+# build flac1.5.0
+RUN \
+  apk update \
+  && apk --no-cache add alpine-sdk git cmake doxygen pandoc \
+  && git clone https://github.com/xiph/flac.git -b 1.5.0 \
+  && cd flac \
+  && git clone https://github.com/xiph/ogg.git \
+  && echo -e "\ntarget_link_libraries(replaygain_analysis m)" >> src/share/replaygain_analysis/CMakeLists.txt \
+  && cmake . \
+  && make -j $(nproc) \
+  && make install \
+  && cd ../
 # install dependencies  
 RUN \
-  apk --no-cache add fuse fuse-dev flac \
+  apk --no-cache add fuse fuse-dev \
   && /usr/local/bin/python -m pip install --upgrade pip
 
 # enable non-root users to make FUSE fs non-private
@@ -34,11 +46,17 @@ RUN echo "user_allow_other" >> /etc/fuse.conf
 RUN chmod 666 /etc/passwd 
 
 # Ensure that we get a docker image cache invalidation when there's new content available
-ADD https://api.github.com/repos/andresch/trackfs/compare/master...HEAD /dev/null
+ADD https://api.github.com/repos/letwir/trackfs/compare/master...HEAD /dev/null
 
 # Now install the latest trackfs version from pypi
 RUN \
-  pip install trackfs\>=0.2.5
+  apk --no-cache add gcc python3-dev musl-dev linux-headers \
+  && pip install psutil \
+  && pip install git+https://github.com/letwir/trackfs/ --break-system-packages
+
+# Remove build kit
+RUN \
+  apk del gcc python3-dev musl-dev linux-headers alpine-sdk git cmake doxygen pandoc
 
 # source directory containing flac+cue files
 VOLUME /src
@@ -49,6 +67,6 @@ VOLUME /dst
 COPY launcher.sh /usr/local/bin/
 RUN chmod 555 /usr/local/bin/launcher.sh
 
-ENTRYPOINT ["/usr/local/bin/launcher.sh", "/src", "/dst"]
+ENTRYPOINT ["/usr/local/bin/launcher.sh", "-j $(nproc)", "/src", "/dst"]
 
 

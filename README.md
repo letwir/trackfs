@@ -2,15 +2,37 @@
 `trackfs_fork  `
 =======  
 Unicode対応、flac1.5.0にあわせて変更を施したtrackfsです。  
+Docker未検証
+# ローカルインストール時の方法  
+
+```
+#flac1.5.0のビルド
+apt-get -y install build-essential git cmake doxygen mandoc
+git clone https://github.com/xiph/flac.git -b 1.5.0
+cd flac
+git clone https://github.com/xiph/ogg.git
+echo -e "\ntarget_link_libraries(replaygain_analysis m)" >> src/share/replaygain_analysis/CMakeLists.txt
+make -j $(nproc)
+make install
+apt-get -y purge build-essential git cmake doxygen mandoc
+apt-get clean
+  
+#trackfsの依存インストール
+apt-get -y install python3 python3-pip fuse libfuse-dev
 ```
 pip install git+https://github.com/letwir/trackfs/
 ```
 or
 ```  
-pipx inject trackfs psutil  
 pipx install git+https://github.com/letwir/trackfs/
+pipx inject trackfs psutil  
 ```
 でインストールできます。
+
+参考:  
+https://serhii.net/dtb/250121-0951-pipx-inject-library-into-app-environment/  
+https://note.com/rily_cat/n/neefa6067afaa  
+-----
 
 `trackfs` is a read-only FUSE filesystem that splits audio files that contain full albums into individual FLAC files per track.
 
