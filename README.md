@@ -20,6 +20,7 @@ apt-get clean
 #trackfsの依存インストール
 apt-get -y install python3 python3-pip fuse libfuse-dev
 ```
+```
 pip install git+https://github.com/letwir/trackfs/
 ```
 or
