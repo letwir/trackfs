@@ -154,6 +154,6 @@ def init(ignore):
     AlbumInfo.IGNORE_TAGS_REX = re.compile(ignore)
 
 
-@lru_cache(maxsize=15)
+@lru_cache(maxsize=5)
 def get(path) -> AlbumInfo:
     return AlbumInfo(path)
