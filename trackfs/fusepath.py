@@ -29,7 +29,7 @@ from . import albuminfo
 import logging
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR     : str   = '/'
+DEFAULT_TRACK_SEPARATOR     : str   = '_'
 DEFAULT_MAX_TITLE_LEN       : int   = 20
 DEFAULT_ALBUM_EXTENSION     : str   = '(?i:\\.flac|\\.wav)'
 DEFAULT_VALID_CHARS         : str   = "-_() " + string.printable
@@ -43,7 +43,6 @@ class Factory:
     track_separator         : str   = DEFAULT_TRACK_SEPARATOR
     max_title_len           : int   = DEFAULT_MAX_TITLE_LEN
     album_extension         : str   = DEFAULT_ALBUM_EXTENSION
-    valid_filename_chars    : str   = DEFAULT_VALID_CHARS
     keep_album              : bool  = DEFAULT_KEEP_ALBUM
     track_extension         : bool  = DEFAULT_TRACK_EXTENSION
     
@@ -82,7 +81,7 @@ class Factory:
         return FusePath(
             source_root, extension, True,
             track.num, track.title, self
-        )      
+        )
         
 _DEFAULT_FACTORY = Factory()
 
@@ -102,8 +101,6 @@ class FusePath:
     def max_title_len(self): return self._factory.max_title_len
     @property
     def flac_extension(self): return self._factory.album_extension
-    @property
-    def valid_filename_chars(self): return self._factory.valid_filename_chars
     @property
     def track_file_regex(self): return self._factory.track_file_regex
     @property
@@ -132,8 +129,8 @@ class FusePath:
     def vpath(self):
         if(self.is_track): 
             return (
-                f'{self.source_root}{self.extension}{self.track_separator}{self.num:03d}'
-                f'{self.title_fragment}{self.track_extension}'
+                f'{self.source_root}{self.track_separator}'
+                f'{self.num:03d}{self.title_fragment}{self.track_extension}'
             )
         else:  
             return self.source

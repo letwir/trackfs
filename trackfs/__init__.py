@@ -101,7 +101,6 @@ If you are absolutely sure that that's what you want, use the option "--root-all
         keep_album=args.keep, separator=args.separator, album_extension=args.extension,
         title_length=int(args.title_length), tags_ignored=args.ignore
     )
-
     fuse = FUSE(trackfs, args.mount, foreground=foreground, allow_other=allow_other)
 
 

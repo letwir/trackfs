@@ -16,6 +16,7 @@
 
 import os
 import re
+import sys
 import string
 import unicodedata
 
@@ -28,7 +29,7 @@ from . import albuminfo
 import logging
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR     : str   = '.#-#.'
+DEFAULT_TRACK_SEPARATOR     : str   = '/'
 DEFAULT_MAX_TITLE_LEN       : int   = 20
 DEFAULT_ALBUM_EXTENSION     : str   = '(?i:\\.flac|\\.wav)'
 DEFAULT_VALID_CHARS         : str   = "-_() " + string.printable
@@ -42,7 +43,6 @@ class Factory:
     track_separator         : str   = DEFAULT_TRACK_SEPARATOR
     max_title_len           : int   = DEFAULT_MAX_TITLE_LEN
     album_extension         : str   = DEFAULT_ALBUM_EXTENSION
-    valid_filename_chars    : str   = DEFAULT_VALID_CHARS
     keep_album              : bool  = DEFAULT_KEEP_ALBUM
     track_extension         : bool  = DEFAULT_TRACK_EXTENSION
     
@@ -102,8 +102,6 @@ class FusePath:
     @property
     def flac_extension(self): return self._factory.album_extension
     @property
-    def valid_filename_chars(self): return self._factory.valid_filename_chars
-    @property
     def track_file_regex(self): return self._factory.track_file_regex
     @property
     def album_ext_regex(self): return self._factory.album_ext_regex
@@ -122,7 +120,7 @@ class FusePath:
         if self.title is None or len(self.title) == 0: 
             return ""
         else:
-            non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '_')
+            non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '■')
             clean_title = unicodedata.normalize('NFKC', self.title)[:self.max_title_len]
             clean_title = clean_title.translate(non_bmp_map)
             return "."+''.join("_" if c in '[]\\/:*?%&$\'`"<>|+ ' else c for c in clean_title)
@@ -131,8 +129,8 @@ class FusePath:
     def vpath(self):
         if(self.is_track): 
             return (
-                f'{self.source_root}{self.extension}{self.track_separator}{self.num:03d}'
-                f'{self.title_fragment}{self.track_extension}'
+                f'{self.source_root}{self.track_separator}'
+                f'{self.num:03d}{self.title_fragment}{self.track_extension}'
             )
         else:  
             return self.source
