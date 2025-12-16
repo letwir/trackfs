@@ -28,7 +28,7 @@ from . import albuminfo
 import logging
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR     : str   = '/'
+DEFAULT_TRACK_SEPARATOR     : str   = '.#-#.'
 DEFAULT_MAX_TITLE_LEN       : int   = 20
 DEFAULT_ALBUM_EXTENSION     : str   = '(?i:\\.flac|\\.wav)'
 DEFAULT_VALID_CHARS         : str   = "-_() " + string.printable
@@ -122,7 +122,7 @@ class FusePath:
         if self.title is None or len(self.title) == 0: 
             return ""
         else:
-            non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '■')
+            non_bmp_map = dict.fromkeys(range(0x10000, sys.maxunicode + 1), '_')
             clean_title = unicodedata.normalize('NFKC', self.title)[:self.max_title_len]
             clean_title = clean_title.translate(non_bmp_map)
             return "."+''.join("_" if c in '[]\\/:*?%&$\'`"<>|+ ' else c for c in clean_title)

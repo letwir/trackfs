@@ -16,19 +16,19 @@ def slurp(fn):
 setuptools.setup(
     name="trackfs",
     version=slurp("VERSION"),
-    author="Andreas Schmidt",
+    author="Andreas Schmidt,letwir",
     author_email="author@example.com",
     description="A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track",
     long_description=slurp("README.py.md"),
     long_description_content_type="text/markdown",
-    url="https://github.com/andresch/trackfs",
+    url="https://github.com/letwir/trackfs",
     packages=setuptools.find_packages(),
     install_requires=[
        "mutagen", "fusepy", "Lark", "chardet"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Development Status :: 4 - Beta",
+        "Development Status :: 5 - Alpha",
         "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
         "Operating System :: POSIX",
     ],
