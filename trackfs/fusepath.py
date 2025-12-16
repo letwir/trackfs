@@ -15,6 +15,7 @@
 #
 
 import os
+import sys
 import re
 import string
 import unicodedata
