@@ -4,7 +4,7 @@
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
-# See https://github.com/andresch/trackfs for details.
+# See https://github.com/letwir/trackfs for details.
 #
 
 # make sure the current user has an entry in /etc/passwd

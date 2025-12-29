@@ -43,7 +43,7 @@ https://note.com/rily_cat/n/neefa6067afaa
 
 Accompanying cuesheets must use the fileextension `.cue` and have the same basename as album file.
 
-The recommended way to use `trackfs` is using the docker image `andresch/trackfs`. In case you want to use `trackfs` without docker see section [Manual Installation](https://github.com/andresch/trackfs#manual-installation) below.
+The recommended way to use `trackfs` is using the docker image `andresch/trackfs`. In case you want to use `trackfs` without docker see section [Manual Installation](https://github.com/letwir/trackfs#manual-installation) below.
  
 Usage
 -----
@@ -213,5 +213,5 @@ Acknowledgments
 License
 -------
 
-`trackfs` is licensed under the terms of the [GNU Lesser General Public License v3.0](https://github.com/andresch/trackfs/blob/master/LICENSE.md)
+`trackfs` is licensed under the terms of the [GNU Lesser General Public License v3.0](https://github.com/letwir/trackfs/blob/master/LICENSE.md)
 

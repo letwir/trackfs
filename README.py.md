@@ -4,7 +4,7 @@
 
 The `trackfs` python package provides a read-only FUSE filesystem that splits FLAC+CUE files (FLAC files with cue sheet embedded as vorbis comment) into individual FLAC files per track.
 
-The recommended way to use `trackfs` is with docker and image `andresch/trackfs`. Please refer to the [`trackfs` homepage](https://github.com/andresch/trackfs) for further details. 
+The recommended way to use `trackfs` is with docker and image `andresch/trackfs`. Please refer to the [`trackfs` homepage](https://github.com/letwir/trackfs) for further details. 
 
 Usage
 -----
@@ -27,7 +27,7 @@ While the tracks can be used like regular files, they don't exist in the physica
 
 You should **NOT** run `trackfs` as user root. Instead it is recommended to run it with a user account who has _just_ the rights necessary to read the files in the music libary. If you accidentially launch `trackfs` as root, trackfs exit with an error messgage. If you know what you are doing and want to run track as root, you have to add the option `--root-allowed`.
 
-In addition `trackfs` provides a bunch of options to fine-tune its behaviour. Call `trackfs --help` to learn about the options or visit the [`trackfs` homepage](https://github.com/andresch/trackfs#all-trackfs-options)
+In addition `trackfs` provides a bunch of options to fine-tune its behaviour. Call `trackfs --help` to learn about the options or visit the [`trackfs` homepage](https://github.com/letwir/trackfs#all-trackfs-options)
 
 Installation
 ----
@@ -107,5 +107,5 @@ Acknowledgments
 License
 -------
 
-`trackfs` is licensed under the terms of the [GNU Lesser General Public License v3.0](https://github.com/andresch/trackfs/blob/master/LICENSE.md)
+`trackfs` is licensed under the terms of the [GNU Lesser General Public License v3.0](https://github.com/letwir/trackfs/blob/master/LICENSE.md)
 

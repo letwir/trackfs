@@ -3,7 +3,7 @@
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
-# See https://github.com/andresch/trackfs for details.
+# See https://github.com/letwir/trackfs for details.
 #
 
 import setuptools
@@ -21,10 +21,10 @@ setuptools.setup(
     description="A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track",
     long_description=slurp("README.py.md"),
     long_description_content_type="text/markdown",
-    url="https://github.com/andresch/trackfs",
+    url="https://github.com/letwir/trackfs",
     packages=setuptools.find_packages(),
     install_requires=[
-       "mutagen", "fusepy", "Lark", "chardet"
+        "mutagen", "fusepy", "Lark", "chardet", "psutil"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -34,8 +34,8 @@ setuptools.setup(
     ],
     python_requires='>=3.8',
     entry_points={
-      'console_scripts': [
-         'trackfs=trackfs.__init__:main'
-      ],
+        'console_scripts': [
+            'trackfs=trackfs.__init__:main'
+        ],
     }
 )

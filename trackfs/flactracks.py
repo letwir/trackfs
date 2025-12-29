@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
+# ...And Modified 2024-2025 letwir
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
-# See https://github.com/andresch/trackfs for details.
+# See https://github.com/letwir/trackfs for details.
 #
 
 import os
 import shlex
 import time
 import wave
-import psutil
+import logging
 
 from dataclasses import dataclass
 from math import trunc
@@ -21,26 +22,22 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple, Dict, Optional
 from threading import RLock, Thread
 
+import psutil
+
 from . import albuminfo
 from .fusepath import FusePath
 from .cuesheet import Track
 
-import logging
-
 log = logging.getLogger(__name__)
-# CPU論理コア数の格納。
-cpu_cores = str(psutil.cpu_count())
 
 class FlacSplitException(Exception):
     pass
-
 
 @dataclass(frozen=True)
 class TrackInfo:
     temp_file_path: os.PathLike
     ref_count: int = 1
     last_accessed: float = time.time()
-
 
 class TrackManager:
     """Keeps track of all individual tracks that currently get processed
@@ -54,6 +51,11 @@ class TrackManager:
 
     """
 
+    # CPU論理コア数の格納。ここ以外でpsutilを使わない。
+    #  マルチスレッド機能を仮実装 " -j XX "
+    DEFAULT_FLAC_THREADS = f"-j {psutil.cpu_count()}"
+    # flacエンコード引数.  --silent --force --fastの意味
+    DEFAULT_FLAC_ARGS = "-sf0"
     DEFAULT_TEMP_FILE_TTL = 60
     # We should keep the lead time big enough, as the calculation of the 
     # remaining track time is based on percentage of file-size
@@ -182,12 +184,12 @@ class TrackManager:
         track = album_info.track(fp.num)
         #  flac1.5.0に最適化
         #  decodeに" --cue=[#.#][-[#.#]] " //Set the beginning and ending cuepoints to decodeを利用したい
-        #  encodeにマルチスレッド機能を仮実装 " -j XX "
-        #  論理コアをpsutilで取得して使っている。
+        #  --skip=STARTTIME --until=ENDTime
+        # -dscF: --decode --silent --stdout --decode-through-errors
         flac_cmd = (
             f'flac -dscF --skip={track.start.flac_time()}'
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f'| flac -sf0j {cpu_cores}'
+            f'| flac {DEFAULT_FLAC_ARGS} {DEFAULT_FLAC_THREADS}'
             f'  {self.track_tags_as_flac_args(album_info,fp.num)}{picture_arg} -o {track_file} -'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
@@ -210,7 +212,7 @@ class TrackManager:
 
         extracts the track from the underlying WAVE  file and associated CUE-Sheet into
         a temporary file and then opens the temporary file"""
-        log.info(f'open track "{path}"')
+        log.info(f'open track: "{path}"')
 
         track_file = self._new_temp_filename()
 
@@ -238,14 +240,14 @@ class TrackManager:
                     nframes -= chunk_size
 
         flac_cmd = (
-            f'flac -sf0j {cpu_cores}'
+            f'flac {DEFAULT_FLAC_ARGS} {DEFAULT_FLAC_THREADS}'
             f'  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o "{track_file}" "{wave_track_file}"'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
         rc = run(flac_cmd, shell=True, stdout=None, stderr=DEVNULL).returncode
         with self.rwlock:
             if rc != 0:
-                err_msg = f'failed to extract track #{fp.num} from file "{fp.source}"'
+                err_msg = f'failed to extract track #{fp.num} from file: "{fp.source}"'
                 log.error(err_msg)
                 os.remove(track_file)
                 del self[path]
@@ -295,7 +297,7 @@ class TrackManager:
                     del self.preloaded_next_tracks[path]
 
     @staticmethod
-    def _find_this_and_next_track(album_info: albuminfo.AlbumInfo, num: int) -> Tuple[Track or None, Track or None]:
+    def _find_this_and_next_track(album_info: albuminfo.AlbumInfo,num: int) -> Tuple[Track or None, Track or None]:
         log.info(f'checking for subsequent track of track "{num}"')
         tracks = album_info.tracks()
         if tracks is not None:

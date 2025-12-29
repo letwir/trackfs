@@ -4,7 +4,7 @@
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
-# See https://github.com/andresch/trackfs for details.
+# See https://github.com/letwir/trackfs for details.
 #
 
 import re
@@ -24,6 +24,8 @@ log = logging.getLogger(__name__)
 
 DEFAULT_IGNORE_TAGS_REX = re.compile('CUE_TRACK.*|COMMENT')
 
+class Error:
+    Parce: Exception = Exception
 
 class AlbumInfo:
     IGNORE_TAGS_REX = DEFAULT_IGNORE_TAGS_REX
@@ -77,8 +79,10 @@ class AlbumInfo:
         log.debug(f"raw cue sheet from FLAC file:\n{raw_cue}")
         try:
             result = cuesheet.parse(raw_cue, meta.info.length)
-        except:
-            log.warning(f'could not parse cue sheet; ignore cue sheet')
+        # あまりにもエラーが多い箇所なので一般的なExceptionを利用する。
+        # 何が起こってるのかさっぱり分からん
+        except Error.Parce:
+            log.warning(f'could not parse cue sheet; ignore cue sheet: {Error.Parce}\n{raw_cue}')
             return None
         log.debug(f"parsed cue sheet from FLAC file:\n{result}")
         return result
