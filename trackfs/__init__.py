@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 # 
 # Copyright 2020-2021 by Andreas Schmidt
-# ...And Modified 2024-2025 letwir
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
@@ -13,7 +12,7 @@ from __future__ import print_function, absolute_import, division
 from .fuseops import TrackFSOps
 
 
-def main(foreground: bool=True, allow_other: bool=True):
+def main(foreground=True, allow_other=True):
     import os
     import sys
     import argparse
@@ -56,7 +55,7 @@ def main(foreground: bool=True, allow_other: bool=True):
         help=f'Nr. of characters of the track title in filename of track (default: {fusepath.DEFAULT_MAX_TITLE_LEN})'
     )
     parser.add_argument(
-        '--root-allowed', dest='rootok', default=DEFAULT_FLAC_THREADS
+        '--root-allowed', dest='rootok', action='store_true',
         help=(
             'Allow running as with root permissions; Neither necessary nor recommended. '
             'Use only when you know what you are doing'
@@ -78,10 +77,11 @@ def main(foreground: bool=True, allow_other: bool=True):
         'mount',
         help='The mount point for the mapped directory tree'
     )
-    parser.add_argument(
-        '-j', '--threads', dest='threads', action='store_true',
-        help='[flac -j] command. CPU threads (default: max)'
-    )
+ # うまい実装を思いついたらユーザーが設定できるようにする
+ #   parser.add_argument(
+ #       '-j', '--threads', dest='threads'
+ #       help='[flac -j] command. CPU threads (default: max)'
+ #   )
     args = parser.parse_args()
 
     log_fmt = '{levelname:6s}[{threadName:15s}]({module:10}) {message}'
@@ -95,8 +95,7 @@ def main(foreground: bool=True, allow_other: bool=True):
     if os.geteuid() == 0 and not args.rootok:
         print(
             f'''By default {os.path.basename(sys.argv[0])} don't allow to run with root permissions. 
-
-If you are absolutely sure that that's what you want, use the option "--root-allowed"''',
+            If you are absolutely sure that that's what you want, use the option "--root-allowed"''',
             file=sys.stderr
         )
         exit(1)
