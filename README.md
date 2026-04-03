@@ -1,12 +1,33 @@
 
-`trackfs_fork  `
+# trackfs (fork)
 =======  
 Unicode対応、flac1.5.0にあわせて変更を施したtrackfsです。  
-Docker未検証
-# ローカルインストール時の方法  
-
+埋め込みCUEを含むflacを、FUSEを使って **1曲ごとの仮想 flac ファイル** として扱えます。
+  
+## 何これ？
+「1アルバム1ファイル」形式のflacを  
+FUSEを使って、**1曲ずつの仮想ファイルとして見せる**ツールです。
+## これ要る？
+埋め込みCUE対応のアプリが少ないので困った。
+この方法ならEmbyやNavidromeも1アルバム1ファイルで保管してても曲ごと認識してくれる。  
+## 動くとどうなる？
+指定したフォルダに曲ごとにファイルが見えるようになる。
+これはffmpegやmetaflacで認識できるが本体はtrackfsが読んでいる所にある。
+なのでFUSE先のディスク消費は無い。
+```text
+ファイル名.#-#.02.タイトル名.flac
 ```
-#flac1.5.0のビルド
+  
+## フォークで変えた所
+* 英数字以外全部_に変換されてたのでUnicodeに対応した。
+* flac1.5.0に対応してflac切り出しもマルチスレッドで処理。
+  
+## 使い方
+> [!NOTE]
+> Docker 動作は未検証です。
+### インストール  
+```bash
+# flac1.5.0のビルド(Ubuntu 24.04は必要。25以降は不要)
 apt-get -y install build-essential git cmake doxygen mandoc
 git clone https://github.com/xiph/flac.git -b 1.5.0
 cd flac
@@ -17,13 +38,12 @@ make install
 apt-get -y purge build-essential git cmake doxygen mandoc
 apt-get clean
   
-#trackfsの依存インストール
+# trackfsの依存インストール
 apt-get -y install python3 python3-pip fuse libfuse-dev
-```
+  
+# trackfsのインストール
 pip install git+https://github.com/letwir/trackfs/
-```
-or
-```  
+# or
 pipx install git+https://github.com/letwir/trackfs/
 pipx inject trackfs psutil  
 ```
@@ -34,6 +54,46 @@ https://serhii.net/dtb/250121-0951-pipx-inject-library-into-app-environment/
 https://note.com/rily_cat/n/neefa6067afaa  
 -----
 
+### サービス化の例(vnev使用)
+
+
+```
+# フォルダパス
+## 実ファイルのある場所
+SRC=/mnt/NAS/Music/
+## FUSEフォルダ
+OUT=/mnt/music/
+# venv環境構築
+sudo mkdir -p /opt/trackfs
+sudo python -m venv /opt/trackfs/venv
+# systemd登録
+sudo tee /etc/systemd/system/trackfs.service <<EOF
+[Unit]
+Description=trackfs service
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/opt/trackfs/venv/bin/python /opt/trackfs/venv/bin/trackfs --root-allowed -t 25 $SRC $OUT
+User=root
+Group=root
+SyslogIdentifier=trackfs
+Restart=on-failure
+RemainAfterExit=no
+RestartSec=100ms
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl enable trackfs.service
+sudo systemctl start trackfs.service
+```
+
+
+
+=======  
 `trackfs` is a read-only FUSE filesystem that splits audio files that contain full albums into individual FLAC files per track.
 
 `trackfs` supports three flavors of album files:
