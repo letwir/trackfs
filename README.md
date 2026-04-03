@@ -56,7 +56,7 @@ https://note.com/rily_cat/n/neefa6067afaa
 ### サービス化の例(vnev使用)
 
 
-```
+```bash
 # フォルダパス
 ## 実ファイルのある場所
 SRC=/mnt/NAS/Music/
