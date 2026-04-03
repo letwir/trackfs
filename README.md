@@ -1,6 +1,5 @@
 
 # trackfs (fork)
-=======  
 Unicode対応、flac1.5.0にあわせて変更を施したtrackfsです。  
 埋め込みCUEを含むflacを、FUSEを使って **1曲ごとの仮想 flac ファイル** として扱えます。
   
