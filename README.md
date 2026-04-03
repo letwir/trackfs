@@ -53,7 +53,7 @@ https://serhii.net/dtb/250121-0951-pipx-inject-library-into-app-environment/
 https://note.com/rily_cat/n/neefa6067afaa  
 -----
 
-### サービス化の例(vnev使用)
+### サービス化の例(venv使用)
 
 
 ```bash
