@@ -51,14 +51,36 @@ func stringReplaceAll(s, old, new string) string {
 }
 
 // getTracks uses the existing poc-metaflac parsing
+import (
+	"bytes"
+	"encoding/json"
+	"os/exec"
+)
+
 func getTracks(src string) []struct{Number int; Title string} {
-	// Attempt to call poc-metaflac and parse its JSON output.
 	cmdPath := "./poc-metaflac"
 	if _, err := os.Stat(cmdPath); err != nil {
 		return []struct{Number int; Title string}{}
 	}
-	out, err := os.ReadFile(src) // placeholder to satisfy compile while we implement exec
-	_ = out
-	return []struct{Number int; Title string}{}
+	cmd := exec.Command(cmdPath, src)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return []struct{Number int; Title string}{}
+	}
+	var parsed []struct{
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
+		return []struct{Number int; Title string}{}
+	}
+	res := make([]struct{Number int; Title string}, len(parsed))
+	for i, p := range parsed {
+		res[i].Number = p.Number
+		res[i].Title = p.Title
+	}
+	return res
 }
 
