@@ -146,17 +146,31 @@ func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 
 // getTracks: call poc-metaflac and parse JSON
 func getTracks(src string) []struct{ Number int; Title string } {
-	cmdPath := "./poc-metaflac"
-	if _, err := os.Stat(cmdPath); err != nil {
-		log.Printf("poc-metaflac not found at %s", cmdPath)
+	// Resolve poc-metaflac binary: prefer PATH, then sibling of current executable
+	cmdName := "poc-metaflac"
+	path, err := exec.LookPath(cmdName)
+	if err != nil {
+		// try same directory as this binary
+		exe, eerr := os.Executable()
+		if eerr == nil {
+			dir := filepath.Dir(exe)
+			try := filepath.Join(dir, cmdName)
+			if _, serr := os.Stat(try); serr == nil {
+				path = try
+			}
+		}
+	}
+	if path == "" {
+		log.Printf("poc-metaflac binary not found in PATH or executable directory")
 		return []struct{ Number int; Title string }{}
 	}
-	cmd := exec.Command(cmdPath, src)
+	cmd := exec.Command(path, src)
 	var out bytes.Buffer
+	var errbuf bytes.Buffer
 	cmd.Stdout = &out
-	cmd.Stderr = os.Stderr
+	cmd.Stderr = &errbuf
 	if err := cmd.Run(); err != nil {
-		log.Printf("poc-metaflac failed: %v", err)
+		log.Printf("poc-metaflac failed: %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
 		return []struct{ Number int; Title string }{}
 	}
 	var parsed []struct{
@@ -164,7 +178,7 @@ func getTracks(src string) []struct{ Number int; Title string } {
 		Title  string `json:"title"`
 	}
 	if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
-		log.Printf("json parse failed: %v", err)
+		log.Printf("json parse failed: %v; output: %s", err, out.String())
 		return []struct{ Number int; Title string }{}
 	}
 	res := make([]struct{ Number int; Title string }, len(parsed))
