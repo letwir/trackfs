@@ -171,71 +171,50 @@ class TrackFSOps(Operations):
         return None
 
     def readdir(self, path, fh):
-        try:
-            log.info(f"readdir [{fh}] ({path})")
-            vpath = os.path.relpath(path, self.root)
-            if vpath == ".":
-                vpath = ""
-            parts = self._fusepath_factory.split_vpath(vpath)
-            log.info(f"VPATH={vpath}")
-            log.info(f"PARTS={parts}")
+        log.info(f"readdir [{fh}] ({path})")
 
-            entries = [".", ".."]
-            if os.path.isdir(real_path):
-                real_path = os.path.join(self.root, vpath)
-                entries.extend(os.listdir(real_path))
+        vpath = os.path.relpath(path, self.root)
+        if vpath == ".":
+            vpath = ""
+
+        entries = [".", ".."]
+
+        real_path = os.path.join(self.root, vpath)
+
+        # ROOT
+        if vpath == "":
+            for filename in os.listdir(self.root):
+                entries.append(filename)
+            return entries
+
+        # ALBUM
+        if os.path.isdir(real_path):
+            for f in os.listdir(real_path):
+                if f.lower().endswith((".flac", ".wav")):
+                    entries.append(f)
+            return entries
+
+        # VIRTUAL TRACKS
+        parts = self._fusepath_factory.split_vpath(vpath)
+
+        if parts[0] == "album":
+            album = parts[1]
+
+            realfile = self.resolve_album_file(os.path.join(self.root, album))
+            if not realfile:
                 return entries
-            # ROOT
-            if parts[0] == "root":
-                for filename in os.listdir(path):
-                    basename, ext = os.path.splitext(filename)
-                    if ext.lower() in [".flac", ".wav"]:
-                        entries.append(basename)
-                    else:
-                        entries.append(filename)
-                log.info(f"READDIR ENTRIES={entries!r}")
-                return entries
-            # VIRTUAL ALBUM
-            if parts[0] == "album":
-                album = parts[1]
-                realfile = None
 
-                # album.flac style
-                for ext in [".flac", ".wav"]:
-                    candidate = path + ext
+            trx = albuminfo.get(realfile).tracks()
 
-                    if os.path.exists(candidate):
-                        realfile = candidate
-                        break
+            for t in trx:
+                fp = self._fusepath_factory.from_track(
+                    os.path.splitext(realfile)[0],
+                    os.path.splitext(realfile)[1],
+                    t,
+                )
+                entries.append(os.path.basename(fp.vpath))
 
-                # directory album style
-                if realfile is None and os.path.isdir(path):
-                    for filename in os.listdir(path):
-                        if filename.lower().endswith((".flac", ".wav")):
-                            realfile = os.path.join(path, filename)
-                            break
-
-                log.info(f"REALFILE={realfile}")
-
-                if realfile is None:
-                    return entries
-
-                trx = albuminfo.get(realfile).tracks()
-
-                for t in trx:
-                    fp = self._fusepath_factory.from_track(
-                        os.path.splitext(realfile)[0],
-                        os.path.splitext(realfile)[1],
-                        t,
-                    )
-
-                    entries.append(os.path.basename(fp.vpath))
-
-                log.info(f"READDIR ENTRIES={entries!r}")
-                return entries
-        except Exception:
-            log.exception("readdir failed")
-            raise
+        return entries
 
     def readlink(self, path, *args, **pargs):
         log.info(f"readlink ({path})")

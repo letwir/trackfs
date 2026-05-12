@@ -158,6 +158,21 @@ class FusePath:
         if os.path.exists(candidate):
             return candidate
 
+        # 🔥 ここが危険なのでガード追加
+        if not os.path.isdir(self.source_root):
+            raise FileNotFoundError(self.source_root)
+
+        for f in os.listdir(self.source_root):
+            p = os.path.join(self.source_root, f)
+            if os.path.isfile(p) and f.lower().endswith((".flac", ".wav")):
+                return p
+
+        raise FileNotFoundError(self.source_root)
+
+        candidate = self.source_root + self.extension
+        if os.path.exists(candidate):
+            return candidate
+
         # fallback
         for f in os.listdir(self.source_root):
             if f.lower().endswith(self.extension):
