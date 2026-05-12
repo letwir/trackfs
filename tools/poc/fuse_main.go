@@ -2,8 +2,8 @@ package main
 
 import (
 	"bytes"
+	"bufio"
 	"context"
-	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
@@ -11,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -146,47 +147,84 @@ func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 
 // getTracks: call poc-metaflac and parse JSON
 func getTracks(src string) []struct{ Number int; Title string } {
-	// Resolve poc-metaflac binary: prefer PATH, then sibling of current executable
-	cmdName := "poc-metaflac"
-	path, err := exec.LookPath(cmdName)
-	if err != nil {
-		// try same directory as this binary
-		exe, eerr := os.Executable()
-		if eerr == nil {
-			dir := filepath.Dir(exe)
-			try := filepath.Join(dir, cmdName)
-			if _, serr := os.Stat(try); serr == nil {
-				path = try
-			}
+	// Try metaflac directly
+	mf, err := exec.LookPath("metaflac")
+	var cueText string
+	if err == nil {
+		cmd := exec.Command(mf, "--show-tag=CUESHEET", src)
+		var out bytes.Buffer
+		var errbuf bytes.Buffer
+		cmd.Stdout = &out
+		cmd.Stderr = &errbuf
+		if err := cmd.Run(); err == nil {
+			cueText = out.String()
+		} else {
+			log.Printf("metaflac failed: %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
+		}
+	} else {
+		log.Printf("metaflac not found in PATH: %v", err)
+	}
+
+	if strings.TrimSpace(cueText) == "" {
+		// fallback to .cue file
+		base := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
+		cuePath := filepath.Join(filepath.Dir(src), base+".cue")
+		if b, rerr := os.ReadFile(cuePath); rerr == nil {
+			cueText = string(b)
 		}
 	}
-	if path == "" {
-		log.Printf("poc-metaflac binary not found in PATH or executable directory")
+
+	if strings.TrimSpace(cueText) == "" {
+		log.Printf("no CUESHEET found via metaflac nor .cue file")
 		return []struct{ Number int; Title string }{}
 	}
-	cmd := exec.Command(path, src)
-	var out bytes.Buffer
-	var errbuf bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &errbuf
-	if err := cmd.Run(); err != nil {
-		log.Printf("poc-metaflac failed: %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
-		return []struct{ Number int; Title string }{}
-	}
-	var parsed []struct{
-		Number int    `json:"number"`
-		Title  string `json:"title"`
-	}
-	if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
-		log.Printf("json parse failed: %v; output: %s", err, out.String())
-		return []struct{ Number int; Title string }{}
-	}
-	res := make([]struct{ Number int; Title string }, len(parsed))
-	for i, p := range parsed {
-		res[i].Number = p.Number
-		res[i].Title = sanitizeForFs(p.Title)
+
+	tracks := parseCue(cueText)
+	res := make([]struct{ Number int; Title string }, len(tracks))
+	for i, t := range tracks {
+		res[i].Number = t.Number
+		res[i].Title = sanitizeForFs(t.Title)
 	}
 	return res
+}
+
+// parseCue copied from poc-metaflac implementation
+func parseCue(r string) []struct{ Number int; Title string } {
+	s := bufio.NewScanner(strings.NewReader(r))
+	trackRe := regexp.MustCompile(`^\s*TRACK\s+([0-9]+)`) 
+	titleRe := regexp.MustCompile(`^\s*TITLE\s+"(.*)"`) 
+	indexRe := regexp.MustCompile(`^\s*INDEX\s+01\s+([0-9]{2}:[0-9]{2}:[0-9]{2})`)
+
+	var tracks []struct{ Number int; Title string }
+	var cur struct{ Number int; Title string }
+	inTrack := false
+	for s.Scan() {
+		line := s.Text()
+		if m := trackRe.FindStringSubmatch(line); m != nil {
+			if inTrack {
+				tracks = append(tracks, cur)
+			}
+			inTrack = true
+			num, _ := strconv.Atoi(m[1])
+			cur = struct{ Number int; Title string }{Number: num}
+			continue
+		}
+		if !inTrack {
+			continue
+		}
+		if m := titleRe.FindStringSubmatch(line); m != nil {
+			cur.Title = m[1]
+			continue
+		}
+		if m := indexRe.FindStringSubmatch(line); m != nil {
+			// ignore index value for name; just continue
+			continue
+		}
+	}
+	if inTrack {
+		tracks = append(tracks, cur)
+	}
+	return tracks
 }
 
 func truncateRunes(s string, n int) string {
