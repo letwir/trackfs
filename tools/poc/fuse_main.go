@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"bufio"
 	"context"
 	"flag"
@@ -12,8 +11,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"bazil.org/fuse"
@@ -21,6 +22,32 @@ import (
 )
 
 // Simple FUSE prototype exposing a single album as a directory with per-track files
+// All extraction logic is now inline (no external poc-extract dependency)
+
+// TrackGen caches generation state for a single track.
+// sync.Once ensures extraction runs exactly once per TrackGen instance.
+type TrackGen struct {
+	mu    sync.Mutex
+	once  sync.Once
+	src   string
+	track int
+	path  string
+	err   error
+}
+
+func (t *TrackGen) GetPath() (string, error) {
+	t.once.Do(t.generate)
+	return t.path, t.err
+}
+
+func (t *TrackGen) generate() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.path != "" || t.err != nil {
+		return
+	}
+	t.path, t.err = ensureTrackGenerated(t.src, t.track)
+}
 
 func main() {
 	// Allow flags anywhere (move --length and its value to front)
@@ -92,8 +119,11 @@ func main() {
 // RootDir implements fs.Node + fs.HandleReadDirAller
 type RootDir struct {
 	AlbumName string
-	Tracks    []struct{ Number int; Title string }
-	Source    string
+	Tracks    []struct {
+		Number int
+		Title  string
+	}
+	Source string
 }
 
 func (r *RootDir) Attr(ctx context.Context, a *fuse.Attr) error {
@@ -109,8 +139,11 @@ func (r *RootDir) ReadDirAll(ctx context.Context) ([]fuse.Dirent, error) {
 // AlbumDir lists tracks
 type AlbumDir struct {
 	AlbumName string
-	Tracks    []struct{ Number int; Title string }
-	Source    string
+	Tracks    []struct {
+		Number int
+		Title  string
+	}
+	Source string
 }
 
 func (d *AlbumDir) Attr(ctx context.Context, a *fuse.Attr) error {
@@ -151,14 +184,15 @@ type TrackFile struct {
 	Number int
 	Title  string
 	Source string
-	Path   string // path to generated track file (populated on open)
+	gen    *TrackGen // lazy generation state
 }
 
 func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	a.Mode = 0444
-	// if generated file exists, return its size
-	if f.Path != "" {
-		if st, err := os.Stat(f.Path); err == nil {
+	// generate on first Attr access (lazy)
+	path, err := f.getGen().GetPath()
+	if err == nil && path != "" {
+		if st, err := os.Stat(path); err == nil {
 			a.Size = uint64(st.Size())
 		}
 	}
@@ -166,20 +200,26 @@ func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	return nil
 }
 
+func (f *TrackFile) getGen() *TrackGen {
+	if f.gen == nil {
+		f.gen = &TrackGen{src: f.Source, track: f.Number}
+	}
+	return f.gen
+}
+
 // Open: ensure track is generated and return a handle
 func (f *TrackFile) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
-	// generate on demand
-	outPath, err := ensureTrackGenerated(f.Source, f.Number)
+	// generate on demand (safe to call multiple times due to sync.Once)
+	path, err := f.getGen().GetPath()
 	if err != nil {
-		log.Printf("generate track failed: %v", err)
+		log.Printf("generate track #%d failed: %v", f.Number, err)
 		return nil, fuse.EIO
 	}
-	f.Path = outPath
-	return &TrackHandle{Path: outPath}, nil
+	return &TrackHandle{Path: path}, nil
 }
 
 // TrackHandle supports Read
-type TrackHandle struct{
+type TrackHandle struct {
 	Path string
 	fd   *os.File
 }
@@ -188,70 +228,247 @@ func (h *TrackHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fus
 	// open file lazily
 	if h.fd == nil {
 		f, err := os.Open(h.Path)
-		if err != nil { return fuse.EIO }
+		if err != nil {
+			return fuse.EIO
+		}
 		h.fd = f
 	}
 	buf := make([]byte, req.Size)
 	n, err := h.fd.ReadAt(buf, req.Offset)
-	if err != nil && err != io.EOF { return fuse.EIO }
+	if err != nil && err != io.EOF {
+		return fuse.EIO
+	}
 	resp.Data = buf[:n]
 	return nil
 }
 
 func (h *TrackHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
-	if h.fd != nil { h.fd.Close(); h.fd = nil }
+	if h.fd != nil {
+		h.fd.Close()
+		h.fd = nil
+	}
 	return nil
 }
 
-// getTracks: call poc-metaflac and parse JSON
-func getTracks(src string) []struct{ Number int; Title string } {
-	// Try metaflac directly
-	mf, err := exec.LookPath("metaflac")
-	var cueText string
-	if err == nil {
-		cmd := exec.Command(mf, "--show-tag=CUESHEET", src)
-		var out bytes.Buffer
-		var errbuf bytes.Buffer
-		cmd.Stdout = &out
-		cmd.Stderr = &errbuf
-		if err := cmd.Run(); err == nil {
-			cueText = out.String()
-		} else {
-			log.Printf("metaflac failed (direct): %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
-			// try running metaflac from the file's directory with basename argument
-			base := filepath.Base(src)
-			cmd2 := exec.Command(mf, "--show-tag=CUESHEET", base)
-			cmd2.Dir = filepath.Dir(src)
-			var out2 bytes.Buffer
-			var errbuf2 bytes.Buffer
-			cmd2.Stdout = &out2
-			cmd2.Stderr = &errbuf2
-			if err2 := cmd2.Run(); err2 == nil {
-				cueText = out2.String()
-			} else {
-				log.Printf("metaflac failed (chdir): %v; stderr: %s", err2, strings.TrimSpace(errbuf2.String()))
-			}
+// ============================================================
+// Extraction Engine (inlined from extractor.go)
+// ============================================================
+
+func ensureTrackGenerated(src string, track int) (string, error) {
+	// create temp dir per source
+	tmpRoot := "/tmp"
+	tmpDir, err := os.MkdirTemp(tmpRoot, "trackfs-extract-")
+	if err != nil {
+		return "", err
+	}
+	// call extraction logic inline
+	cueText, err := getCueFromMetaflac(src)
+	if err != nil || strings.TrimSpace(cueText) == "" {
+		base := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
+		cuePath := filepath.Join(filepath.Dir(src), base+".cue")
+		b, rerr := os.ReadFile(cuePath)
+		if rerr != nil {
+			return "", fmt.Errorf("no CUESHEET found via metaflac nor .cue file")
 		}
-	} else {
-		log.Printf("metaflac not found in PATH: %v", err)
+		cueText = string(b)
 	}
 
-	if strings.TrimSpace(cueText) == "" {
+	fmt.Fprintln(os.Stderr, "[INFO] using temp dir:", tmpDir)
+
+	// write cue to temp dir
+	cueFile := filepath.Join(tmpDir, "export.cue")
+	if err := os.WriteFile(cueFile, []byte(cueText), 0644); err != nil {
+		return "", fmt.Errorf("cannot write cue: %w", err)
+	}
+
+	// try direct shnsplit
+	err = runShnSplitDirect(tmpDir, cueFile, src)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "[WARN] shnsplit direct failed, trying pipe fallback:", err)
+		err = runShnSplitPipe(tmpDir, cueFile, src)
+		if err != nil {
+			return "", fmt.Errorf("shnsplit failed: %w", err)
+		}
+	}
+
+	// find track file
+	return findTrackFile(tmpDir, track)
+}
+
+// getCueFromMetaflac extracts CUESHEET from FLAC metadata
+func getCueFromMetaflac(path string) (string, error) {
+	// Try direct call first
+	cmd := exec.Command("metaflac", "--show-tag=CUESHEET", path)
+	b, err := cmd.Output()
+	if err == nil {
+		out := string(b)
+		out = strings.ReplaceAll(out, "\r\n", "\n")
+		if strings.HasPrefix(out, "CUESHEET=") {
+			out = strings.TrimPrefix(out, "CUESHEET=")
+			out = strings.TrimPrefix(out, "\"")
+			out = strings.TrimSuffix(out, "\"\n")
+		}
+		if strings.TrimSpace(out) != "" {
+			return out, nil
+		}
+	}
+
+	// Fallback: chdir to the source's directory and run metaflac with basename.
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	oldwd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldwd) }()
+	if err := os.Chdir(dir); err != nil {
+		return "", err
+	}
+	cmd = exec.Command("metaflac", "--show-tag=CUESHEET", base)
+	b, err = cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	out := string(b)
+	out = strings.ReplaceAll(out, "\r\n", "\n")
+	if strings.HasPrefix(out, "CUESHEET=") {
+		out = strings.TrimPrefix(out, "CUESHEET=")
+		out = strings.TrimPrefix(out, "\"")
+		out = strings.TrimSuffix(out, "\"\n")
+	}
+	return out, nil
+}
+
+func runShnSplitDirect(tempDir, cuePath, src string) error {
+	// shnsplit -f cue -o flac src
+	cmd := exec.Command("shnsplit", "-f", cuePath, "-o", "flac", src)
+	cmd.Dir = tempDir
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	return cmd.Run()
+}
+
+func runShnSplitPipe(tempDir, cuePath, src string) error {
+	// flac -d -c src | shnsplit -f cue -t "%n.%p" -o flac -
+	dec := exec.Command("flac", "-d", "-c", src)
+	split := exec.Command("shnsplit", "-f", cuePath, "-t", "%n.%p", "-o", "flac", "-")
+	split.Dir = tempDir
+
+	r, w := ioPipe()
+	dec.Stdout = w
+	split.Stdin = r
+	dec.Stderr = os.Stderr
+	split.Stdout = os.Stdout
+	split.Stderr = os.Stderr
+
+	if err := dec.Start(); err != nil {
+		return err
+	}
+	if err := split.Start(); err != nil {
+		_ = dec.Process.Kill()
+		return err
+	}
+	if err := dec.Wait(); err != nil {
+		_ = split.Process.Kill()
+		return err
+	}
+	w.Close()
+	if err := split.Wait(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ioPipe() (*os.File, *os.File) {
+	r, w, _ := os.Pipe()
+	return r, w
+}
+
+func findTrackFile(dir string, track int) (string, error) {
+	ents, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+	padded := fmt.Sprintf("%02d", track)
+	numRe := regexp.MustCompile(`^0*([0-9]+)`)
+	for _, e := range ents {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		// prefer flac files
+		ext := strings.ToLower(filepath.Ext(name))
+		if ext != ".flac" && ext != ".wav" {
+			continue
+		}
+		if strings.HasPrefix(name, padded) {
+			return filepath.Join(dir, name), nil
+		}
+		if m := numRe.FindStringSubmatch(name); m != nil {
+			n, _ := strconv.Atoi(m[1])
+			if n == track {
+				return filepath.Join(dir, name), nil
+			}
+		}
+	}
+	// fallback: try any .flac
+	for _, e := range ents {
+		if !e.IsDir() && strings.ToLower(filepath.Ext(e.Name())) == ".flac" {
+			return filepath.Join(dir, e.Name()), nil
+		}
+	}
+	return "", fmt.Errorf("no extracted file found")
+}
+
+// encodeWavToFlac converts WAV to FLAC
+func encodeWavToFlac(wavPath string) (string, error) {
+	encPath := strings.TrimSuffix(wavPath, ".wav") + ".flac"
+	nproc := runtime.NumCPU()
+	cmd := exec.Command("flac", "-j", strconv.Itoa(nproc), "-f", "-o", encPath, wavPath)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	fmt.Fprintln(os.Stderr, "[INFO] encoding WAV to FLAC:", cmd.String())
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("flac encode failed: %w", err)
+	}
+	return encPath, nil
+}
+
+// ============================================================
+// Track parsing (from original fuse_main.go)
+// ============================================================
+
+// getTracks: call metaflac directly and parse CUE
+func getTracks(src string) []struct {
+	Number int
+	Title  string
+} {
+	cueText, err := getCueFromMetaflac(src)
+	if err != nil || strings.TrimSpace(cueText) == "" {
 		// fallback to .cue file
 		base := strings.TrimSuffix(filepath.Base(src), filepath.Ext(src))
 		cuePath := filepath.Join(filepath.Dir(src), base+".cue")
-		if b, rerr := os.ReadFile(cuePath); rerr == nil {
-			cueText = string(b)
+		b, rerr := os.ReadFile(cuePath)
+		if rerr != nil {
+			log.Printf("no CUESHEET found via metaflac nor .cue file")
+			return []struct {
+				Number int
+				Title  string
+			}{}
 		}
+		cueText = string(b)
 	}
 
 	if strings.TrimSpace(cueText) == "" {
-		log.Printf("no CUESHEET found via metaflac nor .cue file")
-		return []struct{ Number int; Title string }{}
+		log.Printf("no CUESHEET found")
+		return []struct {
+			Number int
+			Title  string
+		}{}
 	}
 
 	tracks := parseCue(cueText)
-	res := make([]struct{ Number int; Title string }, len(tracks))
+	res := make([]struct {
+		Number int
+		Title  string
+	}, len(tracks))
 	for i, t := range tracks {
 		res[i].Number = t.Number
 		res[i].Title = sanitizeForFs(t.Title)
@@ -259,15 +476,24 @@ func getTracks(src string) []struct{ Number int; Title string } {
 	return res
 }
 
-// parseCue copied from poc-metaflac implementation
-func parseCue(r string) []struct{ Number int; Title string } {
+// parseCue parses CUE sheet text into track list
+func parseCue(r string) []struct {
+	Number int
+	Title  string
+} {
 	s := bufio.NewScanner(strings.NewReader(r))
-	trackRe := regexp.MustCompile(`^\s*TRACK\s+([0-9]+)`) 
-	titleRe := regexp.MustCompile(`^\s*TITLE\s+"(.*)"`) 
+	trackRe := regexp.MustCompile(`^\s*TRACK\s+([0-9]+)`)
+	titleRe := regexp.MustCompile(`^\s*TITLE\s+"(.*)"`)
 	indexRe := regexp.MustCompile(`^\s*INDEX\s+01\s+([0-9]{2}:[0-9]{2}:[0-9]{2})`)
 
-	var tracks []struct{ Number int; Title string }
-	var cur struct{ Number int; Title string }
+	var tracks []struct {
+		Number int
+		Title  string
+	}
+	var cur struct {
+		Number int
+		Title  string
+	}
 	inTrack := false
 	for s.Scan() {
 		line := s.Text()
@@ -277,7 +503,10 @@ func parseCue(r string) []struct{ Number int; Title string } {
 			}
 			inTrack = true
 			num, _ := strconv.Atoi(m[1])
-			cur = struct{ Number int; Title string }{Number: num}
+			cur = struct {
+				Number int
+				Title  string
+			}{Number: num}
 			continue
 		}
 		if !inTrack {
@@ -288,7 +517,6 @@ func parseCue(r string) []struct{ Number int; Title string } {
 			continue
 		}
 		if m := indexRe.FindStringSubmatch(line); m != nil {
-			// ignore index value for name; just continue
 			continue
 		}
 	}
@@ -308,7 +536,6 @@ func truncateRunes(s string, n int) string {
 
 func sanitizeForFs(s string) string {
 	// normalize and replace forbidden characters
-	// simple approach here
 	s = strings.TrimSpace(s)
 	re := regexp.MustCompile("[\\x00-\\x1F\\x7F]+")
 	s = re.ReplaceAllString(s, "")
@@ -319,37 +546,6 @@ func sanitizeForFs(s string) string {
 	// also collapse multiple underscores
 	s = regexp.MustCompile("_+").ReplaceAllString(s, "_")
 	return s
-}
-
-// ensureTrackGenerated generates a track file using extractor PoC and returns path
-func ensureTrackGenerated(src string, track int) (string, error) {
-	// create temp dir per source
-	tmpRoot := "/tmp"
-	tmpDir, err := os.MkdirTemp(tmpRoot, "trackfs-extract-")
-	if err != nil {
-		return "", err
-	}
-	// call poc-extract (or run logic inline); use existing poc-extract binary if present
-	exName := "poc-extract"
-	if p, err := exec.LookPath(exName); err == nil {
-		cmd := exec.Command(p, "--outdir", tmpDir, src, strconv.Itoa(track))
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return "", err
-		}
-		// try to find result in tmpDir
-		ents, derr := os.ReadDir(tmpDir)
-		if derr != nil { return "", derr }
-		for _, e := range ents {
-			if !e.IsDir() {
-				ext := strings.ToLower(filepath.Ext(e.Name()))
-				if ext == ".flac" || ext == ".wav" { return filepath.Join(tmpDir, e.Name()), nil }
-			}
-		}
-		return "", fmt.Errorf("no output file from extractor")
-	}
-	return "", fmt.Errorf("extractor binary not found in PATH")
 }
 
 // FS wrapper implementing fs.FS
