@@ -21,8 +21,9 @@ type TrackEntry struct {
 }
 
 func main() {
+	maxLen := flag.Int("length", 0, "max title length in characters (0 = no limit)")
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "usage: poc-manifest <file.flac>\n")
+		fmt.Fprintf(os.Stderr, "usage: poc-manifest [--length N] <file.flac>\n")
 	}
 	flag.Parse()
 	if flag.NArg() < 1 {
@@ -36,12 +37,24 @@ func main() {
 	root := filepath.Dir(src)
 	albumName := base[:len(base)-len(filepath.Ext(base))]
 	for _, t := range tracks {
-		v := filepath.Join(root, albumName, fmt.Sprintf("%03d.%s.flac", t.Number, sanitizeForFs(t.Title)))
+		title := t.Title
+		if *maxLen > 0 {
+			title = truncateRunes(title, *maxLen)
+		}
+		v := filepath.Join(root, albumName, fmt.Sprintf("%03d.%s.flac", t.Number, sanitizeForFs(title)))
 		entries = append(entries, TrackEntry{VPath: v, Num: t.Number, Title: t.Title, Source: src})
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")
 	_ = enc.Encode(entries)
+}
+
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
 }
 
 func sanitizeForFs(s string) string {
