@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -10,9 +10,9 @@
 #
 # This module provides the cuesheet parsing functionality for trackfs.
 # While it specifies a fully fledged parser for cuesheets, only those
-# elements needed in the context for trackfs (which is the track information) 
+# elements needed in the context for trackfs (which is the track information)
 # get extracted and exposed.
-# 
+#
 # This implementation uses original spec of the cuesheet format as found on archive.org
 # https://web.archive.org/web/20070614044112/http://www.goldenhawk.com/download/cdrwin.pdf
 #
@@ -32,10 +32,10 @@ log = logging.getLogger(__name__)
 # Lark cue-sheet grammar according to original spec
 _CUE_LARK_GRAMMAR = r"""
    cue_sheet      : disc_entries tracks
-   disc_entries   : disc_entry* 
+   disc_entries   : disc_entry*
    tracks         : track*
-    
-   ?disc_entry : catalog 
+
+   ?disc_entry : catalog
       | comment
       | performer
       | songwriter
@@ -54,7 +54,7 @@ _CUE_LARK_GRAMMAR = r"""
       | songwriter
       | title
       | file
-      
+
    catalog        : "CATALOG" UPC_EAN
    comment        : "REM" REST_OF_LINE
    performer      : "PERFORMER" STRING
@@ -67,13 +67,13 @@ _CUE_LARK_GRAMMAR = r"""
    pregap         : "PREGAP" mmssff
    postgap        : "POSTGAP" mmssff
    mmssff         : TIME_ELEM ":" TIME_ELEM ":" TIME_ELEM
-   
+
    TIME_ELEM      : DIGIT ~ 2
    INDEX          : DIGIT ~ 1..2
    UPC_EAN        : DIGIT ~ 12..13
    REST_OF_LINE   : /[^\n]*/ NEWLINE
    ISRC           : LETTER LETTER (DIGIT|LETTER) ~ 10
-   
+
    STRING : ("\"" /.*?/ "\"") | /[^ \n]+/
    FILETYPE : "BINARY"  // Intel binary file (LSBF). Use for data files.
       | "MOTOROLA"      // Motorola binary file (MSBF). Use for data files.
@@ -131,7 +131,7 @@ class TagTools:
 @dataclass
 class CueSheet:
     """Meta data from a parsed cue sheet
-   
+
     """
     tracks: List['Track'] = field(default_factory=list)
     albumartists: List[str] = None
@@ -221,7 +221,7 @@ class Time:
     - three int    : interpreted as mm, ss, ff
 
     The class supports basic math (+,-)
-    The string representation is "mmsscc"; `flac_time' returns the string 
+    The string representation is "mmsscc"; `flac_time' returns the string
     representation than FLAC expects ("mm:ss.cc")
     """
 

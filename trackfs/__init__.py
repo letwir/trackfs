@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -26,7 +26,7 @@ def main(foreground=True, allow_other=True):
     parser = argparse.ArgumentParser(
         description='''A FUSE filesystem for extracting individual tracks from FLAC+CUE files.
 
-        Maps a directory to a mount point while replacing all FLAC+CUE files (with 
+        Maps a directory to a mount point while replacing all FLAC+CUE files (with
         embedded cue sheets) with multiple FLAC files for the individual tracks''')
     parser.add_argument(
         '-s', '--separator', dest='separator', default=fusepath.DEFAULT_TRACK_SEPARATOR,
@@ -89,8 +89,8 @@ def main(foreground=True, allow_other=True):
 
     if os.geteuid() == 0 and not args.rootok:
         print(
-            f'''By default {os.path.basename(sys.argv[0])} don't allow to run with root permissions. 
-     
+            f'''By default {os.path.basename(sys.argv[0])} don't allow to run with root permissions.
+
 If you are absolutely sure that that's what you want, use the option "--root-allowed"''',
             file=sys.stderr
         )

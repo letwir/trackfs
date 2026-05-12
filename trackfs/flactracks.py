@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -55,7 +55,7 @@ class TrackManager:
     """
 
     DEFAULT_TEMP_FILE_TTL = 60
-    # We should keep the lead time big enough, as the calculation of the 
+    # We should keep the lead time big enough, as the calculation of the
     # remaining track time is based on percentage of file-size
     DEFAULT_PRELOAD_LEAD_TIME = DEFAULT_TEMP_FILE_TTL // 2
 
@@ -99,7 +99,7 @@ class TrackManager:
     def _is_announced(self, key: os.PathLike) -> bool:
         """Is the track registered, but not yet processed?"""
         with self.rwlock:
-            # default value "" for get ensures that we don't 
+            # default value "" for get ensures that we don't
             # treat unknown tracks as announced
             return self.registry.get(key, "") is None
 
@@ -160,7 +160,7 @@ class TrackManager:
     def _extract_flac_track(self, path: os.PathLike, fp: FusePath, album_info: albuminfo.AlbumInfo) -> os.PathLike:
         """creates a real file for a given virtual track file
 
-        extracts the track from the underlying FLAC+CUE file into 
+        extracts the track from the underlying FLAC+CUE file into
         a temporary file and then opens the temporary file"""
         log.info(f'open track "{path}"')
 
@@ -265,7 +265,7 @@ class TrackManager:
                     ready_to_process = True
                     self._announce(path)
                 elif self._is_registered(path):
-                    # we already have cached that track => 
+                    # we already have cached that track =>
                     # register additional usage
                     return self._change_usage(path, +1).temp_file_path
 

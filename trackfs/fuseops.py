@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -72,7 +72,7 @@ class TrackFSOps(Operations):
             'st_nlink', 'st_size', 'st_uid'))
 
         if (fp.is_track):
-            # If it's one of the FlacTrackFS track paths, 
+            # If it's one of the FlacTrackFS track paths,
             # we need to adjust the file size to be roughly
             # appropriate for the individual track.
             result['st_size'] = self.tracks.estimate_track_file_size(path, fp)
