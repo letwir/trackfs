@@ -6,6 +6,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -150,13 +151,55 @@ type TrackFile struct {
 	Number int
 	Title  string
 	Source string
+	Path   string // path to generated track file (populated on open)
 }
 
 func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	a.Mode = 0444
-	// set modest default size 0; real implementation should estimate
-	a.Size = 0
+	// if generated file exists, return its size
+	if f.Path != "" {
+		if st, err := os.Stat(f.Path); err == nil {
+			a.Size = uint64(st.Size())
+		}
+	}
 	a.Mtime = time.Now()
+	return nil
+}
+
+// Open: ensure track is generated and return a handle
+func (f *TrackFile) Open(ctx context.Context, req *fuse.OpenRequest, resp *fuse.OpenResponse) (fs.Handle, error) {
+	// generate on demand
+	outPath, err := ensureTrackGenerated(f.Source, f.Number)
+	if err != nil {
+		log.Printf("generate track failed: %v", err)
+		return nil, fuse.EIO
+	}
+	f.Path = outPath
+	return &TrackHandle{Path: outPath}, nil
+}
+
+// TrackHandle supports Read
+type TrackHandle struct{
+	Path string
+	fd   *os.File
+}
+
+func (h *TrackHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
+	// open file lazily
+	if h.fd == nil {
+		f, err := os.Open(h.Path)
+		if err != nil { return fuse.EIO }
+		h.fd = f
+	}
+	buf := make([]byte, req.Size)
+	n, err := h.fd.ReadAt(buf, req.Offset)
+	if err != nil && err != io.EOF { return fuse.EIO }
+	resp.Data = buf[:n]
+	return nil
+}
+
+func (h *TrackHandle) Release(ctx context.Context, req *fuse.ReleaseRequest) error {
+	if h.fd != nil { h.fd.Close(); h.fd = nil }
 	return nil
 }
 
@@ -273,7 +316,45 @@ func sanitizeForFs(s string) string {
 	for _, ch := range forbidden {
 		s = strings.ReplaceAll(s, ch, "_")
 	}
+	// also collapse multiple underscores
+	s = regexp.MustCompile("_+").ReplaceAllString(s, "_")
 	return s
+}
+
+// ensureTrackGenerated generates a track file using extractor PoC and returns path
+func ensureTrackGenerated(src string, track int) (string, error) {
+	// create temp dir per source
+	base := filepath.Base(src)
+	tmpRoot := "/tmp"
+	tmpDir, err := os.MkdirTemp(tmpRoot, "trackfs-extract-")
+	if err != nil {
+		return "", err
+	}
+	// call poc-extract (or run logic inline); use existing poc-extract binary if present
+	exPath := "./poc-extract"
+	if p, err := exec.LookPath(exPath); err == nil {
+		cmd := exec.Command(p, src, strconv.Itoa(track))
+		cmd.Dir = tmpDir
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return "", err
+		}
+		// try to find result in tmpDir
+		ents, derr := os.ReadDir(tmpDir)
+		if derr != nil { return "", derr }
+		for _, e := range ents {
+			if !e.IsDir() {
+				ext := strings.ToLower(filepath.Ext(e.Name()))
+				if ext == ".flac" || ext == ".wav" { return filepath.Join(tmpDir, e.Name()), nil }
+			}
+		}
+		return "", fmt.Errorf("no output file from extractor")
+	}
+	// fallback: run same logic inline (call shnsplit)
+	cmd := exec.Command("shnsplit", "-f", "-", "-o", "flac")
+	_ = cmd
+	return "", fmt.Errorf("extractor binary not found")
 }
 
 // FS wrapper implementing fs.FS
