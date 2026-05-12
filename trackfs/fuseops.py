@@ -16,7 +16,7 @@ import logging
 import os
 import stat
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import RLock
 
 from fuse import Operations
@@ -25,12 +25,13 @@ from . import albuminfo, fusepath
 from .flactracks import TrackManager
 
 log = logging.getLogger(__name__)
+ACC_MODE = os.O_RDONLY | os.O_WRONLY | os.O_RDWR
 
 
 @dataclass
 class OpenFileInfo:
     position: int = 0
-    lock = defaultdict(RLock)
+    lock: RLock = field(default_factory=RLock)
 
 
 class TrackFSOps(Operations):
@@ -50,7 +51,7 @@ class TrackFSOps(Operations):
         self._fusepath_factory = fusepath.Factory(
             track_separator=separator,
             max_title_len=title_length,
-            album_extension=album_extension,
+            extension=album_extension,
             keep_album=keep_album,
         )
         # TODO: avoid global init function
@@ -64,13 +65,18 @@ class TrackFSOps(Operations):
 
     def getattr(self, path, fh=None):
         log.info(f"getattr for ({path}) [{fh}]")
+
         vpath = os.path.relpath(path, self.root)
         parts = self._fusepath_factory.split_vpath(vpath)
+
+        fp = self._fusepath(path)
+
         # 仮想アルバムディレクトリ
-        if parts[0] == "album":
+        if parts[0] == "album" and len(parts) == 2 and not fp.is_track:
             album = parts[1]
-            realfile = os.path.join(self.root, album + ".flac")
-            if os.path.exists(realfile):
+            realfile = self.resolve_album_file(os.path.join(self.root, album))
+
+            if realfile:
                 st = os.lstat(realfile)
 
                 result = dict(
@@ -84,17 +90,12 @@ class TrackFSOps(Operations):
                         "st_uid",
                     )
                 )
+
                 result["st_mode"] = stat.S_IFDIR | 0o755
                 result["st_size"] = 4096
                 return result
-            fp = self._fusepath(path)
-            if fp.is_track:
-                realfile = self.resolve_album_file(fp.source_root)
-                if realfile is None:
-                    raise FileNotFoundError(path)
-                st = os.lstat(realfile)
-            else:
-                st = os.lstat(fp.source)
+
+        st = os.lstat(fp.source)
         result = dict(
             (key, getattr(st, key))
             for key in (
@@ -113,10 +114,11 @@ class TrackFSOps(Operations):
         return result
 
     def open(self, path, flags, *args, **pargs):
+        log.info("OPEN path=%s", path)
         log.info(f'open file "{path}"')
         # We don't want FlacTrackFS messing with actual data.
         # Only allow Read-Only access.
-        if not (flags & os.O_RDONLY):
+        if (flags & ACC_MODE) != os.O_RDONLY:
             raise ValueError("Can only open files read-only.")
         fp = self._fusepath(path)
         if fp.is_track:
@@ -128,6 +130,7 @@ class TrackFSOps(Operations):
         return fh
 
     def read(self, path, size, offset, fh):
+        log.info("READ path=%s size=%s offset=%s", path, size, offset)
         log.info(f"read from [{fh}] {offset} until {offset + size}")
         open_file_info = self._open_files[fh]
         # make sure that only one concurrent read per file handle is possible
@@ -151,7 +154,7 @@ class TrackFSOps(Operations):
             self.tracks.release_track(path, fp)
         return os.close(fh)
 
-    def resolve_album_file(path):
+    def resolve_album_file(self, path):
         if os.path.isfile(path):
             return path
 

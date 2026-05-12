@@ -93,7 +93,7 @@ class TrackManager:
             del self.registry[key]
             os.remove(info.temp_file_path)
 
-        Thread(target=cleanup).start()
+        Thread(target=cleanup, daemon=True).start()
 
     def _is_unregistered(self, key: os.PathLike) -> bool:
         """Is the track at the given key not yet registered?"""
@@ -201,7 +201,7 @@ class TrackManager:
         flac_cmd = (
             f"flac -dscF --skip={track.start.flac_time()}"
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f"| flac {DEFAULT_FLAC_ARGS} {DEFAULT_FLAC_THREADS}"
+            f"| flac {self.DEFAULT_FLAC_ARGS} {self.DEFAULT_FLAC_THREADS}"
             f"  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o {track_file} -"
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
@@ -260,7 +260,7 @@ class TrackManager:
                     nframes -= chunk_size
 
         flac_cmd = (
-            f"flac {DEFAULT_FLAC_ARGS} {DEFAULT_FLAC_THREADS}"
+            f"flac {self.DEFAULT_FLAC_ARGS} {self.DEFAULT_FLAC_THREADS}"
             f'  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o "{track_file}" "{wave_track_file}"'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
@@ -400,7 +400,7 @@ class TrackManager:
                 log.debug(f'next track already preloaded "{path}"')
                 return
         log.info(f'enqueue next track check of "{path}" [{offset}]')
-        self.preload_pool.submit(self._do_check_next_track, path, fp, offset)
+        # self.preload_pool.submit(self._do_check_next_track, path, fp, offset)
 
     def estimate_track_file_size(self, path: os.PathLike, fp: FusePath) -> int:
         track_info = self.get(path, None)

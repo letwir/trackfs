@@ -151,7 +151,17 @@ class FusePath:
     def source(self):
         if self.real_source:
             return self.real_source
-        return self.source_root + self.extension
+
+        candidate = self.source_root + self.extension
+        if os.path.exists(candidate):
+            return candidate
+
+        # fallback
+        for f in os.listdir(self.source_root):
+            if f.lower().endswith(self.extension):
+                return os.path.join(self.source_root, f)
+
+        raise FileNotFoundError(self.source_root)
 
     @property
     def title_fragment(self):
