@@ -25,7 +25,7 @@ from . import albuminfo, cuesheet
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR: str = "♪"
+DEFAULT_TRACK_SEPARATOR: str = "/"
 DEFAULT_MAX_TITLE_LEN: int = 20
 DEFAULT_ALBUM_EXTENSION: str = "(?i:\\.flac|\\.wav)"
 DEFAULT_KEEP_ALBUM: bool = False
@@ -53,7 +53,7 @@ class Factory:
             + r")"
             + separator_rex
             + r"(?P<num>\d+)"
-            + r"(?:\.(?P<title>[^\\/\[\]:*?%&$'`\"<>|+]{"
+            + r"(?P<title>_([^_.\[\]\\/:*?%&$'`\"<>|+]{"
             + str(self.max_title_len)
             + r"}))?"
             + track_exentension_rex
@@ -134,7 +134,7 @@ class FusePath:
             return ""
         clean_title = unicodedata.normalize("NFKD", self.title)[: self.max_title_len]
         safe = "".join("_" if c in "[]\\/:*?%&$'`\"<>|+ 　" else c for c in clean_title)
-        return "." + safe  # 禁足文字とスペースを置換
+        return "." + safe  # 禁則文字とスペースを置換
 
     @property
     def vpath(self):
@@ -159,6 +159,7 @@ class FusePath:
                 if len(trx) > 0:
                     if self.keep_album:
                         entries.append(filename)
+                    entries.split("/")
                     for t in trx:
                         entries.append(
                             self._factory.from_track(basename, extension, t).vpath
