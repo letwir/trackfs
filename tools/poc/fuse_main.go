@@ -324,7 +324,6 @@ func sanitizeForFs(s string) string {
 // ensureTrackGenerated generates a track file using extractor PoC and returns path
 func ensureTrackGenerated(src string, track int) (string, error) {
 	// create temp dir per source
-	base := filepath.Base(src)
 	tmpRoot := "/tmp"
 	tmpDir, err := os.MkdirTemp(tmpRoot, "trackfs-extract-")
 	if err != nil {
