@@ -53,9 +53,9 @@ class Factory:
             + r")"
             + separator_rex
             + r"(?P<num>\d+)"
-            + r"(?P<title>_([^\s\[\]\\/:*?%&$'`\"<>|+]{"
+            + r"(?P<title>\.([^\\.\\[\]\\/:*?%&$'`\"<>|+]{"
             + str(self.max_title_len)
-            + r"}))?"
+            + r"}?))?"
             + track_exentension_rex
             + r"$"
         )
