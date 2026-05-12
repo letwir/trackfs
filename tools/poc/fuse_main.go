@@ -174,7 +174,20 @@ func getTracks(src string) []struct{ Number int; Title string } {
 		if err := cmd.Run(); err == nil {
 			cueText = out.String()
 		} else {
-			log.Printf("metaflac failed: %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
+			log.Printf("metaflac failed (direct): %v; stderr: %s", err, strings.TrimSpace(errbuf.String()))
+			// try running metaflac from the file's directory with basename argument
+			base := filepath.Base(src)
+			cmd2 := exec.Command(mf, "--show-tag=CUESHEET", base)
+			cmd2.Dir = filepath.Dir(src)
+			var out2 bytes.Buffer
+			var errbuf2 bytes.Buffer
+			cmd2.Stdout = &out2
+			cmd2.Stderr = &errbuf2
+			if err2 := cmd2.Run(); err2 == nil {
+				cueText = out2.String()
+			} else {
+				log.Printf("metaflac failed (chdir): %v; stderr: %s", err2, strings.TrimSpace(errbuf2.String()))
+			}
 		}
 	} else {
 		log.Printf("metaflac not found in PATH: %v", err)
