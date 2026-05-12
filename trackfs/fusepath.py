@@ -25,7 +25,7 @@ from . import albuminfo, cuesheet
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR: str = "∫"
+DEFAULT_TRACK_SEPARATOR: str = "♪"
 DEFAULT_MAX_TITLE_LEN: int = 20
 DEFAULT_ALBUM_EXTENSION: str = "(?i:\\.flac|\\.wav)"
 DEFAULT_KEEP_ALBUM: bool = False
@@ -48,16 +48,16 @@ class Factory:
         track_exentension_rex = self.track_extension.replace(".", "\\.")
         # Use _ as title separator (not .) to avoid ambiguity with file extensions
         flac_cue_rex = (
-            r"^(?P<basename>.*)(?P<extension>"
-            + self.album_extension
-            + r")"
-            + separator_rex
-            + r"(?P<num>\d+)"
-            + r"(?P<title>\.([^\\.\\[\]\\/:*?%&$'`\"<>|+]{"
-            + str(self.max_title_len)
-            + r"}?))?"
-            + track_exentension_rex
-            + r"$"
+        r"^(?P<basename>.*)(?P<extension>"
+        + self.album_extension
+        + r")"
+        + separator_rex
+        + r"(?P<num>\d+)"
+        + r"(?:\.(?P<title>[^\\/\[\]:*?%&$'`\"<>|+]{"
+        + str(self.max_title_len)
+        + r"}))?"
+        + track_exentension_rex
+        +
         )
         log.debug("Factory.track_file_regex: " + flac_cue_rex)
         return re.compile(flac_cue_rex)
@@ -74,7 +74,7 @@ class Factory:
             (root, ext) = os.path.splitext(path)
             return FusePath(root, ext, _factory=self)
         log.debug(f'track file in "{path}"')
-        title = match["title"].lstrip()
+        title = match["title"] or ""
         return FusePath(
             match["basename"], match["extension"], True, int(match["num"]), title, self
         )
@@ -131,22 +131,18 @@ class FusePath:
     @property
     def title_fragment(self):
         """the fragment of a track's title that goes into a vpath"""
-        if len(self.title) == 0:
+        if not self.title:
             return ""
-        else:
-            clean_title = unicodedata.normalize("NFKD", self.title)[
-                : self.max_title_len
-            ]
-            return "_" + "".join(
-                "_" if c in "[]\\/:*?%&$'\`\"<>|+  \u3000" else c for c in clean_title
-            )  # 禁足文字とスペースを置換
+        clean_title = unicodedata.normalize("NFKD", self.title)[: self.max_title_len]
+        safe = "".join("_" if c in "[]\\/:*?%&$'`\"<>|+ 　" else c for c in clean_title)
+        return "." + safe  # 禁足文字とスペースを置換
 
     @property
     def vpath(self):
         if self.is_track:
             return (
-                f"{self.source_root}{self.track_separator}{self.num:02d}"  # Cuesheet is MAX 99. foobar2000 recognize 999.
-                f"{self.title_fragment}{self.track_extension}"  # {self.flac_extension) isn't nessesary
+                f"{self.source_root}{self.track_separator}{self.num:02d}"
+                f"{self.title_fragment}{self.track_extension}"
             )
         else:
             return self.source
