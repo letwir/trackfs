@@ -1,12 +1,17 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"bazil.org/fuse"
@@ -58,16 +63,11 @@ func main() {
 	srv := fs.New(c, nil)
 	tree := &RootDir{AlbumName: albumName, Tracks: tracks, Source: src}
 	go func() {
-		if err := srv.Serve(tree); err != nil {
+		if err := srv.Serve(&FS{root: tree}); err != nil {
 			log.Fatalf("serve error: %v", err)
 		}
 	}()
 
-	// wait until mount is ready or fail
-	<-c.Ready
-	if err := c.MountError; err != nil {
-		log.Fatalf("mount failed: %v", err)
-	}
 	// keep running until interrupted
 	select {}
 }
@@ -144,8 +144,69 @@ func (f *TrackFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	return nil
 }
 
+// getTracks: call poc-metaflac and parse JSON
+func getTracks(src string) []struct{ Number int; Title string } {
+	cmdPath := "./poc-metaflac"
+	if _, err := os.Stat(cmdPath); err != nil {
+		log.Printf("poc-metaflac not found at %s", cmdPath)
+		return []struct{ Number int; Title string }{}
+	}
+	cmd := exec.Command(cmdPath, src)
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		log.Printf("poc-metaflac failed: %v", err)
+		return []struct{ Number int; Title string }{}
+	}
+	var parsed []struct{
+		Number int    `json:"number"`
+		Title  string `json:"title"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &parsed); err != nil {
+		log.Printf("json parse failed: %v", err)
+		return []struct{ Number int; Title string }{}
+	}
+	res := make([]struct{ Number int; Title string }, len(parsed))
+	for i, p := range parsed {
+		res[i].Number = p.Number
+		res[i].Title = sanitizeForFs(p.Title)
+	}
+	return res
+}
+
+func truncateRunes(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n])
+}
+
+func sanitizeForFs(s string) string {
+	// normalize and replace forbidden characters
+	// simple approach here
+	s = strings.TrimSpace(s)
+	re := regexp.MustCompile("[\\x00-\\x1F\\x7F]+")
+	s = re.ReplaceAllString(s, "")
+	forbidden := []string{string(os.PathSeparator), "/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
+	for _, ch := range forbidden {
+		s = strings.ReplaceAll(s, ch, "_")
+	}
+	return s
+}
+
+// FS wrapper implementing fs.FS
+type FS struct {
+	root *RootDir
+}
+
+func (f *FS) Root(ctx context.Context) (fs.Node, error) {
+	return f.root, nil
+}
+
 // Ensure interfaces are implemented
-var _ fs.FS = (*RootDir)(nil)
+var _ fs.FS = (*FS)(nil)
 var _ fs.Node = (*RootDir)(nil)
 var _ fs.HandleReadDirAller = (*RootDir)(nil)
 var _ fs.NodeStringLookuper = (*RootDir)(nil)
