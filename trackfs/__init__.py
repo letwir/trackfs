@@ -154,7 +154,8 @@ If you are absolutely sure that that's what you want, use the option "--root-all
 
         _pyfuse3.init(ops, args.mount)
         try:
-            asyncio.run(_pyfuse3.main())
+            import trio
+            trio.run(_pyfuse3.main)
         finally:
             _pyfuse3.close()
     else:
