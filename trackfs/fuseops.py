@@ -87,8 +87,14 @@ class TrackFSOps(Operations):
                 result["st_mode"] = stat.S_IFDIR | 0o755
                 result["st_size"] = 4096
                 return result
-        fp = self._fusepath(path)
-        st = os.lstat(fp.source)
+            fp = self._fusepath(path)
+            if fp.is_track:
+                realfile = self.resolve_album_file(fp.source_root)
+                if realfile is None:
+                    raise FileNotFoundError(path)
+                st = os.lstat(realfile)
+            else:
+                st = os.lstat(fp.source)
         result = dict(
             (key, getattr(st, key))
             for key in (
@@ -145,6 +151,22 @@ class TrackFSOps(Operations):
             self.tracks.release_track(path, fp)
         return os.close(fh)
 
+    def resolve_album_file(path):
+        if os.path.isfile(path):
+            return path
+
+        if os.path.isdir(path):
+            for f in os.listdir(path):
+                if f.lower().endswith((".flac", ".wav")):
+                    return os.path.join(path, f)
+
+        for ext in (".flac", ".wav"):
+            p = path + ext
+            if os.path.exists(p):
+                return p
+
+        return None
+
     def readdir(self, path, fh):
         log.info(f"readdir [{fh}] ({path})")
         vpath = os.path.relpath(path, self.root)
@@ -194,7 +216,7 @@ class TrackFSOps(Operations):
 
             for t in trx:
                 fp = self._fusepath_factory.from_track(
-                    album,
+                    os.path.splitext(realfile)[0],
                     os.path.splitext(realfile)[1],
                     t,
                 )

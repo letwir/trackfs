@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 
 DEFAULT_TRACK_SEPARATOR: str = ".#-#."
 DEFAULT_MAX_TITLE_LEN: int = 20
-DEFAULT_ALBUM_EXTENSION: str = "(?i:\\.flac|\\.wav)"
+DEFAULT_ALBUM_EXTENSION: str = r"(?i:\.flac|\.wav)"
 DEFAULT_VALID_CHARS: str = "-_() " + string.ascii_letters + string.digits
 DEFAULT_KEEP_ALBUM: bool = False
 DEFAULT_TRACK_EXTENSION: str = ".flac"
@@ -39,33 +39,37 @@ class Factory:
 
     track_separator: str = DEFAULT_TRACK_SEPARATOR
     max_title_len: int = DEFAULT_MAX_TITLE_LEN
-    album_extension: str = DEFAULT_ALBUM_EXTENSION
+    extension: str = DEFAULT_ALBUM_EXTENSION
     valid_filename_chars: str = DEFAULT_VALID_CHARS
     keep_album: bool = DEFAULT_KEEP_ALBUM
     track_extension: bool = DEFAULT_TRACK_EXTENSION
 
     @cached_property
     def track_file_regex(self):
-        separator_rex = self.track_separator.replace(".", "\\.")
-        track_exentension_rex = self.track_extension.replace(".", "\\.")
-        flac_cue_rex = (
-            "^(?P<basename>.*?)/"
-            "(?P<num>\\d+)"
-            "(?P<title>(\\.[^\\.]{,"
-            + str(self.max_title_len)
-            + "}?)?)"
-            + track_exentension_rex
-            + "$"
+        ext_re = re.escape(self.track_extension)
+
+        rex = (
+            r"^(?P<basename>.*)/"
+            r"(?P<num>\d+)"
+            r"(?P<title>\.[^/]*)?" + ext_re + r"$"
         )
-        log.debug("Factory.track_file_regex: " + flac_cue_rex)
-        return re.compile(flac_cue_rex)
+
+        log.debug("Factory.track_file_regex: " + rex)
+        return re.compile(rex)
 
     @cached_property
     def album_ext_regex(self):
         return re.compile(self.album_extension)
 
     def from_track(self, source_root, extension, track):
-        return FusePath(source_root, extension, True, track.num, track.title, self)
+        return FusePath(
+            source_root=source_root,
+            extension=extension,
+            is_track=True,
+            num=track.num,
+            title=track.title,
+            _factory=self,
+        )
 
     def from_vpath(self, path):
         """Construct a FusePath instance from a given virtual path"""
@@ -109,6 +113,7 @@ class FusePath:
     num: int = None
     title: str = None
     _factory: Factory = _DEFAULT_FACTORY
+    real_source: str = None
 
     @property
     def track_separator(self):
@@ -144,6 +149,8 @@ class FusePath:
 
     @cached_property
     def source(self):
+        if self.real_source:
+            return self.real_source
         return self.source_root + self.extension
 
     @property
