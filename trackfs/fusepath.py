@@ -64,6 +64,9 @@ class Factory:
     def album_ext_regex(self):
         return re.compile(self.album_extension)
 
+    def from_track(self, source_root, extension, track):
+        return FusePath(source_root, extension, True, track.num, track.title, self)
+
     def from_vpath(self, path):
         """Construct a FusePath instance from a given virtual path"""
         match = self.track_file_regex.match(path)

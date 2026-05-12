@@ -147,44 +147,43 @@ class TrackFSOps(Operations):
 
     def readdir(self, path, fh):
         log.info(f"readdir [{fh}] ({path})")
-
         vpath = os.path.relpath(path, self.root)
-
         if vpath == ".":
             vpath = ""
-
         parts = self._fusepath_factory.split_vpath(vpath)
-
         log.info(f"VPATH={vpath}")
         log.info(f"PARTS={parts}")
 
         entries = [".", ".."]
-
         # ROOT
         if parts[0] == "root":
             for filename in os.listdir(path):
                 basename, ext = os.path.splitext(filename)
-
                 if ext.lower() in [".flac", ".wav"]:
                     entries.append(basename)
                 else:
                     entries.append(filename)
-
             log.info(f"READDIR ENTRIES={entries!r}")
             return entries
-
         # VIRTUAL ALBUM
         if parts[0] == "album":
             album = parts[1]
-
             realfile = None
 
+            # album.flac style
             for ext in [".flac", ".wav"]:
                 candidate = path + ext
 
                 if os.path.exists(candidate):
                     realfile = candidate
                     break
+
+            # directory album style
+            if realfile is None and os.path.isdir(path):
+                for filename in os.listdir(path):
+                    if filename.lower().endswith((".flac", ".wav")):
+                        realfile = os.path.join(path, filename)
+                        break
 
             log.info(f"REALFILE={realfile}")
 
@@ -195,15 +194,15 @@ class TrackFSOps(Operations):
 
             for t in trx:
                 fp = self._fusepath_factory.from_track(
-                    album, os.path.splitext(realfile)[1], t
+                    album,
+                    os.path.splitext(realfile)[1],
+                    t,
                 )
 
                 entries.append(os.path.basename(fp.vpath))
 
             log.info(f"READDIR ENTRIES={entries!r}")
             return entries
-
-        return entries
 
     def readlink(self, path, *args, **pargs):
         log.info(f"readlink ({path})")
