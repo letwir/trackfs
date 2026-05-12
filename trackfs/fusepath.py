@@ -48,16 +48,15 @@ class Factory:
         track_exentension_rex = self.track_extension.replace(".", "\\.")
         # Use _ as title separator (not .) to avoid ambiguity with file extensions
         flac_cue_rex = (
-        r"^(?P<basename>.*)(?P<extension>"
-        + self.album_extension
-        + r")"
-        + separator_rex
-        + r"(?P<num>\d+)"
-        + r"(?:\.(?P<title>[^\\/\[\]:*?%&$'`\"<>|+]{"
-        + str(self.max_title_len)
-        + r"}))?"
-        + track_exentension_rex
-        +
+            r"^(?P<basename>.*)(?P<extension>"
+            + self.album_extension
+            + r")"
+            + separator_rex
+            + r"(?P<num>\d+)"
+            + r"(?:\.(?P<title>[^\\/\[\]:*?%&$'`\"<>|+]{"
+            + str(self.max_title_len)
+            + r"}))?"
+            + track_exentension_rex
         )
         log.debug("Factory.track_file_regex: " + flac_cue_rex)
         return re.compile(flac_cue_rex)
