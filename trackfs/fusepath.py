@@ -49,9 +49,9 @@ class Factory:
         ext_re = re.escape(self.track_extension)
 
         rex = (
-            r"^(?P<basename>.*)/"
-            r"(?P<num>\d+)"
-            r"(?P<title>\.[^/]*)?" + ext_re + r"$"
+            r"^(?P<album>[^/]+)/"
+            r"(?P<num>\d{3})"
+            r"(?P<title>\..+?)?" + re.escape(self.track_extension) + r"$"
         )
 
         log.debug("Factory.track_file_regex: " + rex)
@@ -72,16 +72,18 @@ class Factory:
         )
 
     def from_vpath(self, path):
-        """Construct a FusePath instance from a given virtual path"""
         match = self.track_file_regex.match(path)
         if match is None:
-            log.debug(f'no track file in "{path}"')
             (root, ext) = os.path.splitext(path)
             return FusePath(root, ext, _factory=self)
-        log.debug(f'track file in "{path}"')
-        title = match["title"].lstrip()
+
         return FusePath(
-            match["basename"], ".flac", True, int(match["num"]), title, self
+            source_root=match["album"],
+            extension=".flac",
+            is_track=True,
+            num=int(match["num"]),
+            title=match["title"][1:] if match["title"] else None,
+            _factory=self,
         )
 
     @staticmethod
@@ -179,10 +181,8 @@ class FusePath:
     @property
     def vpath(self):
         if self.is_track:
-            return (
-                f"{self.source_root}/{self.num:03d}"
-                f"{self.title_fragment}{self.track_extension}"
-            )
+            album = os.path.basename(self.source_root)
+            return f"{album}/{self.num:03d}{self.title_fragment}{self.track_extension}"
         else:
             return self.source
 

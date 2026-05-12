@@ -14,7 +14,7 @@ import shlex
 import time
 import wave
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import trunc
 from subprocess import DEVNULL, run
 from tempfile import mkstemp
@@ -39,7 +39,7 @@ class FlacSplitException(Exception):
 class TrackInfo:
     temp_file_path: os.PathLike
     ref_count: int = 1
-    last_accessed: float = time.time()
+    last_accessed: float = field(default_factory=time.time)
 
 
 class TrackManager:
@@ -68,7 +68,7 @@ class TrackManager:
         self.rwlock: RLock = RLock()
         self.registry: Dict[os.PathLike, TrackInfo or Event] = {}
         self.preload_pool: ThreadPoolExecutor = ThreadPoolExecutor(
-            max_workers=cputhread, thread_name_prefix="preload"
+            max_workers=min(4, cputhread), thread_name_prefix="preload"
         )
         self.preloaded_next_tracks: Dict[os.PathLike, FusePath] = {}
         self.preload_lead_time: int = TrackManager.DEFAULT_PRELOAD_LEAD_TIME
@@ -290,6 +290,7 @@ class TrackManager:
                     # we already have cached that track =>
                     # register additional usage
                     result = self._change_usage(path, +1).temp_file_path
+                    ready_to_process = True
 
         album_info = albuminfo.get(fp.source)
         audio_format = album_info.format()
