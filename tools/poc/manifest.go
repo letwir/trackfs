@@ -21,6 +21,21 @@ type TrackEntry struct {
 }
 
 func main() {
+	// Allow flags to appear after positional args by reordering os.Args so flags come first.
+	args := os.Args[1:]
+	flagsFront := make([]string, 0)
+	others := make([]string, 0)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--length" && i+1 < len(args) {
+			flagsFront = append(flagsFront, args[i], args[i+1])
+			i++
+		} else {
+			others = append(others, args[i])
+		}
+	}
+	newArgs := append(flagsFront, others...)
+	os.Args = append([]string{os.Args[0]}, newArgs...)
+
 	maxLen := flag.Int("length", 0, "max title length in characters (0 = no limit)")
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: poc-manifest [--length N] <file.flac>\n")
@@ -30,7 +45,13 @@ func main() {
 		flag.Usage()
 		os.Exit(2)
 	}
+
 	src := flag.Arg(0)
+	// support two-arg form: <root> <relpath>
+	if flag.NArg() >= 2 {
+		src = filepath.Join(flag.Arg(0), flag.Arg(1))
+	}
+
 	tracks := getTracks(src)
 	entries := make([]TrackEntry, 0, len(tracks))
 	base := filepath.Base(src)
