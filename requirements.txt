@@ -1,5 +1,5 @@
 mutagen
-fuse
+fusepy
 Lark
 chardet
 psutil

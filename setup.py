@@ -24,7 +24,7 @@ setuptools.setup(
     long_description_content_type="text/markdown",
     url="https://github.com/letwir/trackfs",
     packages=setuptools.find_packages(),
-    install_requires=["mutagen", "fuse", "Lark", "chardet", "psutils"],
+    install_requires=["mutagen", "fusepy", "Lark", "chardet", "psutils"],
     classifiers=[
         "Programming Language :: Python :: 3",
         "Development Status :: 4 - Beta",

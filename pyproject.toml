@@ -17,7 +17,7 @@ keywords = ["FUSE", "FLAC", "CUE", "filesystem"]
 
 dependencies = [
     "mutagen",
-    "fuse",
+    "fusepy",
     "Lark",
     "chardet",
     "psutils",
