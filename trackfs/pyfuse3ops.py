@@ -28,7 +28,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class OpenFileInfo:
     fd: int
-    lock: asyncio.Lock
+    lock: trio.Lock
 
 
 class PyTrackFS(pyfuse3.Operations):
@@ -57,7 +57,7 @@ class PyTrackFS(pyfuse3.Operations):
         self._inode_to_fp: Dict[int, FusePath] = {}
         self._fp_to_inode: Dict[str, int] = {}
         self._next_inode = pyfuse3.ROOT_INODE + 1
-        self._inode_lock = asyncio.Lock()
+        self._inode_lock = trio.Lock()
 
         # root inode maps to the root directory (as FusePath with empty extension)
         root_fp = FusePath(self.root, "", False, None, None, self._fusepath_factory)
@@ -106,7 +106,7 @@ class PyTrackFS(pyfuse3.Operations):
         fp = self._inode_to_fp[inode]
         path = fp.source
         try:
-            st = await asyncio.to_thread(os.lstat, path)
+            st = await trio.to_thread.run_sync(os.lstat, path)
         except FileNotFoundError:
             raise pyfuse3.FUSEError(errno.ENOENT)
         entry = self._attrs_from_stat(st, inode)
@@ -212,7 +212,7 @@ class PyTrackFS(pyfuse3.Operations):
             raise pyfuse3.FUSEError(errno.ENOENT)
         fp = self._inode_to_fp[inode]
         try:
-            return await asyncio.to_thread(os.readlink, fp.source)
+            return await trio.to_thread.run_sync(os.readlink, fp.source)
         except OSError as e:
             raise pyfuse3.FUSEError(e.errno)
 
@@ -222,7 +222,7 @@ class PyTrackFS(pyfuse3.Operations):
             raise pyfuse3.FUSEError(errno.ENOENT)
         fp = self._inode_to_fp[inode]
         path = fp.source
-        stv = await asyncio.to_thread(os.statvfs, path)
+        stv = await trio.to_thread.run_sync(os.statvfs, path)
         # return a dict-like object pyfuse3 expects
         return dict(
             f_bavail=stv.f_bavail,
@@ -250,12 +250,12 @@ class PyTrackFS(pyfuse3.Operations):
             # prepare virtual track
             path = self.tracks.prepare_track(fp.vpath, fp)
         try:
-            fd = await asyncio.to_thread(os.open, path, flags)
+            fd = await trio.to_thread.run_sync(os.open, path, flags)
         except OSError as e:
             raise pyfuse3.FUSEError(e.errno)
         fh = self._fh_counter
         self._fh_counter += 1
-        self._open_files[fh] = OpenFileInfo(fd=fd, lock=asyncio.Lock())
+        self._open_files[fh] = OpenFileInfo(fd=fd, lock=trio.Lock())
         return pyfuse3.FileInfo(fh=fh)
 
     async def read(self, fh, off, size):
@@ -267,7 +267,7 @@ class PyTrackFS(pyfuse3.Operations):
             # do prefetch checks similar to original implementation
             # use os.pread to avoid changing shared file offset
             try:
-                data = await asyncio.to_thread(os.pread, ofi.fd, size, off)
+                data = await trio.to_thread.run_sync(os.pread, ofi.fd, size, off)
             except OSError as e:
                 raise pyfuse3.FUSEError(e.errno)
             return data
@@ -278,7 +278,7 @@ class PyTrackFS(pyfuse3.Operations):
             return
         ofi = self._open_files.pop(fh)
         try:
-            await asyncio.to_thread(os.close, ofi.fd)
+            await trio.to_thread.run_sync(os.close, ofi.fd)
         except OSError:
             pass
 
