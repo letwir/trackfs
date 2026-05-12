@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -7,29 +7,30 @@
 # See https://github.com/letwir/trackfs for details.
 #
 
-import re
+import logging
 import os
+import re
 import shlex
-from functools import lru_cache, cached_property
+from functools import cached_property, lru_cache
 from typing import List, Optional
 
-from mutagen import File
 import chardet
+from mutagen import File
 
 from . import cuesheet
 
-import logging
-
 log = logging.getLogger(__name__)
 
-DEFAULT_IGNORE_TAGS_REX = re.compile('CUE_TRACK.*|COMMENT')
+DEFAULT_IGNORE_TAGS_REX = re.compile("CUE_TRACK.*|COMMENT")
+
 
 class Error:
     Parce: Exception = Exception
 
+
 class AlbumInfo:
     IGNORE_TAGS_REX = DEFAULT_IGNORE_TAGS_REX
-    CUE_FILE_EXTS = ['.cue', '.CUE']
+    CUE_FILE_EXTS = [".cue", ".CUE"]
 
     def __init__(self, path):
         assert os.path.isfile(path)
@@ -58,9 +59,11 @@ class AlbumInfo:
         with open(cue_path, "rb") as fh:
             cue_bytes = fh.read()
         try:
-            cue_str = cue_bytes.decode(chardet.detect(cue_bytes)['encoding'])
+            cue_str = cue_bytes.decode(chardet.detect(cue_bytes)["encoding"])
         except:
-            log.warning(f'could not detect/decoode character set of cue sheet file "{cue_path}"')
+            log.warning(
+                f'could not detect/decoode character set of cue sheet file "{cue_path}"'
+            )
             return None
         log.debug(f"cue-sheet:\n{cue_str}")
         return cue_str
@@ -68,7 +71,7 @@ class AlbumInfo:
     @cached_property
     def cue(self) -> Optional[cuesheet.CueSheet]:
         meta = self.meta
-        raw_cue = meta.tags.get('CUESHEET', []) if meta.tags else []
+        raw_cue = meta.tags.get("CUESHEET", []) if meta.tags else []
         if len(raw_cue) == 0:
             log.debug(f"regular flac file without cue sheet")
             raw_cue = self._cue_from_external_file()
@@ -82,7 +85,9 @@ class AlbumInfo:
         # あまりにもエラーが多い箇所なので一般的なExceptionを利用する。
         # 何が起こってるのかさっぱり分からん
         except Error.Parce:
-            log.warning(f'could not parse cue sheet; ignore cue sheet: {Error.Parce}\n{raw_cue}')
+            log.warning(
+                f"could not parse cue sheet; ignore cue sheet: {Error.Parce}\n{raw_cue}"
+            )
             return None
         log.debug(f"parsed cue sheet from FLAC file:\n{result}")
         return result
@@ -105,7 +110,7 @@ class AlbumInfo:
     def _album_tags(self):
         meta = self.meta
         tags = {}
-        for (k, v) in (meta.tags if meta.tags else {}):
+        for k, v in meta.tags if meta.tags else {}:
             k = k.upper()
             # skip multi-line tags
             if len(v.splitlines()) != 1:
@@ -113,18 +118,19 @@ class AlbumInfo:
             # skip _IGNORE_TAGS
             if AlbumInfo.IGNORE_TAGS_REX.match(k):
                 continue
-            if k not in tags: tags[k] = []
+            if k not in tags:
+                tags[k] = []
             tags[k].append(v)
 
         # make sure ALBUMARTIST and ALBUM are set
         # in case ARTIST and TITLE have been used instead
-        if 'ALBUMARTIST' not in tags and 'ARTIST' in tags:
-            tags['ALBUMARTIST'] = tags['ARTIST']
-        if 'ALBUM' not in tags and 'TITLE' in tags:
-            tags['ALBUM'] = tags['TITLE']
+        if "ALBUMARTIST" not in tags and "ARTIST" in tags:
+            tags["ALBUMARTIST"] = tags["ARTIST"]
+        if "ALBUM" not in tags and "TITLE" in tags:
+            tags["ALBUM"] = tags["TITLE"]
 
         # add missing tags from cue sheet
-        for (k, v) in self.cue.tags().items():
+        for k, v in self.cue.tags().items():
             if k not in tags:
                 tags[k] = v
 
@@ -132,13 +138,13 @@ class AlbumInfo:
 
     def track_tags(self, num):
         tags = self._album_tags()
-        for (k, vs) in self.track(num).tags().items():
+        for k, vs in self.track(num).tags().items():
             tags[k] = vs
 
-        if 'TRACKTOTAL' not in tags:
-            tags['TRACKTOTAL'] = [str(len(self.tracks()))]
-        if 'COMPOSER' not in tags:
-            tags['COMPOSER'] = tags['ARTIST']
+        if "TRACKTOTAL" not in tags:
+            tags["TRACKTOTAL"] = [str(len(self.tracks()))]
+        if "COMPOSER" not in tags:
+            tags["COMPOSER"] = tags["ARTIST"]
         return tags
 
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # ...And Modified 2024-2025 letwir
 # All rights reserved.
@@ -9,33 +9,32 @@
 #
 
 #
-# This module provides mapping of names between the virtual trackfs 
+# This module provides mapping of names between the virtual trackfs
 # filesystem and the underlying root filesystem, esp. the naming of
 # the individual track-files
 #
 
+import logging
 import os
 import re
 import unicodedata
-import logging
-
 from dataclasses import dataclass
 from functools import cached_property
 
-from . import cuesheet
-from . import albuminfo
+from . import albuminfo, cuesheet
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR: str = '∫'
+DEFAULT_TRACK_SEPARATOR: str = "∫"
 DEFAULT_MAX_TITLE_LEN: int = 20
-DEFAULT_ALBUM_EXTENSION: str = '(?i:\\.flac|\\.wav)'
+DEFAULT_ALBUM_EXTENSION: str = "(?i:\\.flac|\\.wav)"
 DEFAULT_KEEP_ALBUM: bool = False
-DEFAULT_TRACK_EXTENSION: str = '.flac'
+DEFAULT_TRACK_EXTENSION: str = ".flac"
+
 
 @dataclass(frozen=True)
 class Factory:
-    '''manages the configuration options for the virtual fuse paths'''
+    """manages the configuration options for the virtual fuse paths"""
 
     track_separator: str = DEFAULT_TRACK_SEPARATOR
     max_title_len: int = DEFAULT_MAX_TITLE_LEN
@@ -45,14 +44,20 @@ class Factory:
 
     @cached_property
     def track_file_regex(self):
-        separator_rex = self.track_separator.replace('.','\\.')
-        track_exentension_rex = self.track_extension.replace('.','\\.')
+        separator_rex = self.track_separator.replace(".", "\\.")
+        track_exentension_rex = self.track_extension.replace(".", "\\.")
         flac_cue_rex = (
-            '^(?P<basename>.*)(?P<extension>'+self.album_extension+')'+separator_rex
-            + '(?P<num>\\d+)(?P<title>(\\.[^\\.]{,'+str(self.max_title_len)
-            + '}?)?)'+track_exentension_rex+'$'
+            "^(?P<basename>.*)(?P<extension>"
+            + self.album_extension
+            + ")"
+            + separator_rex
+            + "(?P<num>\\d+)(?P<title>(\\.[^\\.]{,"
+            + str(self.max_title_len)
+            + "}?)?)"
+            + track_exentension_rex
+            + "$"
         )
-        log.debug("Factory.track_file_regex: "+flac_cue_rex)
+        log.debug("Factory.track_file_regex: " + flac_cue_rex)
         return re.compile(flac_cue_rex)
 
     @cached_property
@@ -67,24 +72,22 @@ class Factory:
             (root, ext) = os.path.splitext(path)
             return FusePath(root, ext, _factory=self)
         log.debug(f'track file in "{path}"')
-        title = match['title'].lstrip()
+        title = match["title"].lstrip()
         return FusePath(
-            match['basename'], match['extension'], True,
-            int(match['num']), title,
-            self
+            match["basename"], match["extension"], True, int(match["num"]), title, self
         )
 
     def from_track(self, source_root: str, extension: str, track):
-        return FusePath(
-            source_root, extension, True,
-            track.num, track.title, self
-        )
+        return FusePath(source_root, extension, True, track.num, track.title, self)
+
 
 _DEFAULT_FACTORY = Factory()
 
+
 @dataclass(frozen=True)
 class FusePath:
-    ''' represents an entry in the virtual trackfs filesystem'''
+    """represents an entry in the virtual trackfs filesystem"""
+
     source_root: str
     extension: str
     is_track: bool = False
@@ -93,19 +96,30 @@ class FusePath:
     _factory: Factory = _DEFAULT_FACTORY
 
     @property
-    def track_separator(self): return self._factory.track_separator
+    def track_separator(self):
+        return self._factory.track_separator
+
     @property
-    def max_title_len(self): return self._factory.max_title_len
-#    @property
-#    def flac_extension(self): return self._factory.album_extension
+    def max_title_len(self):
+        return self._factory.max_title_len
+        #    @property
+        #    def flac_extension(self): return self._factory.album_extension
+
     @property
-    def track_file_regex(self): return self._factory.track_file_regex
+    def track_file_regex(self):
+        return self._factory.track_file_regex
+
     @property
-    def album_ext_regex(self): return self._factory.album_ext_regex
+    def album_ext_regex(self):
+        return self._factory.album_ext_regex
+
     @property
-    def keep_album(self): return self._factory.keep_album
+    def keep_album(self):
+        return self._factory.keep_album
+
     @property
-    def track_extension(self): return self._factory.track_extension
+    def track_extension(self):
+        return self._factory.track_extension
 
     @cached_property
     def source(self):
@@ -113,19 +127,23 @@ class FusePath:
 
     @property
     def title_fragment(self):
-        '''the fragment of a track's title that goes into a vpath'''
+        """the fragment of a track's title that goes into a vpath"""
         if len(self.title) == 0:
             return ""
         else:
-            clean_title = unicodedata.normalize('NFKD', self.title)[:self.max_title_len]
-            return "."+''.join("_" if c in '[]\\/:*?%&$\'`"<>|+ 　' else c for c in clean_title) # 禁足文字とスペースを置換
+            clean_title = unicodedata.normalize("NFKD", self.title)[
+                : self.max_title_len
+            ]
+            return "." + "".join(
+                "_" if c in "[]\\/:*?%&$'`\"<>|+ 　" else c for c in clean_title
+            )  # 禁足文字とスペースを置換
 
     @property
     def vpath(self):
-        if (self.is_track):
+        if self.is_track:
             return (
-                f'{self.source_root}{self.track_separator}{self.num:02d}' #Cuesheet is MAX 99. foobar2000 recognize 999.
-                f'{self.title_fragment}{self.track_extension}' #{self.flac_extension) isn't nessesary
+                f"{self.source_root}{self.track_separator}{self.num:02d}"  # Cuesheet is MAX 99. foobar2000 recognize 999.
+                f"{self.title_fragment}{self.track_extension}"  # {self.flac_extension) isn't nessesary
             )
         else:
             return self.source
@@ -134,7 +152,7 @@ class FusePath:
         return os.path.dirname(self.source_root)
 
     def readdir(self):
-        entries = ['.', '..']
+        entries = [".", ".."]
         for filename in os.listdir(self.source):
             (basename, extension) = os.path.splitext(filename)
             filepath = os.path.join(self.source, filename)
@@ -144,19 +162,20 @@ class FusePath:
                     if self.keep_album:
                         entries.append(filename)
                     for t in trx:
-                        entries.append( 
+                        entries.append(
                             self._factory.from_track(basename, extension, t).vpath
                         )
                 else:
                     entries.append(filename)
             else:
                 entries.append(filename)
-        log.debug(f'vdir entries:{entries}')
+        log.debug(f"vdir entries:{entries}")
         return entries
 
-    def for_other_track(self, num: int, title: str, start: cuesheet.Time, end: cuesheet.Time):
-        '''Construct fusepath entry for another track of the same FLAC+CUE file'''
+    def for_other_track(
+        self, num: int, title: str, start: cuesheet.Time, end: cuesheet.Time
+    ):
+        """Construct fusepath entry for another track of the same FLAC+CUE file"""
         return FusePath(
-            self.source_root, self.extension, True,
-            num, title, self._factory
+            self.source_root, self.extension, True, num, title, self._factory
         )
