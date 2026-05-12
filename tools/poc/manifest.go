@@ -8,7 +8,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"golang.org/x/text/unicode/norm"
 )
 
 type TrackEntry struct {
@@ -43,14 +45,22 @@ func main() {
 }
 
 func sanitizeForFs(s string) string {
-	// crude: replace path separators and leading/trailing spaces
+	// Normalize to NFC
+	s = norm.NFC.String(s)
+	// clean path
 	s = filepath.Clean(s)
-	s = stringReplaceAll(s, string(os.PathSeparator), "_")
+	// replace forbidden characters with underscore
+	forbidden := []string{string(os.PathSeparator), "/", "\\", ":", "*", "?", "\"", "<", ">", "|"}
+	for _, ch := range forbidden {
+		s = strings.ReplaceAll(s, ch, "_")
+	}
+	// remove control characters
+	re := regexp.MustCompile("[\x00-\x1F\x7F]+")
+	s = re.ReplaceAllString(s, "")
+	// collapse whitespace
+	s = regexp.MustCompile(`\s+`).ReplaceAllString(s, " ")
+	s = strings.TrimSpace(s)
 	return s
-}
-
-func stringReplaceAll(s, old, new string) string {
-	return strings.ReplaceAll(s, old, new)
 }
 
 // getTracks uses the existing poc-metaflac parsing
