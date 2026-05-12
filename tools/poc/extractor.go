@@ -20,12 +20,27 @@ import (
 // - if result is WAV, encodes using flac -j N
 
 func main() {
+	// support optional --outdir DIR before arguments
 	if len(os.Args) < 3 {
-		fmt.Fprintln(os.Stderr, "usage: poc-extract <file.flac> <tracknum>")
+		fmt.Fprintln(os.Stderr, "usage: poc-extract [--outdir DIR] <file.flac> <tracknum>")
 		os.Exit(2)
 	}
-	src := os.Args[1]
-	trk, err := strconv.Atoi(os.Args[2])
+	args := os.Args[1:]
+	outdir := ""
+	if len(args) >= 2 && args[0] == "--outdir" {
+		if len(args) < 3 {
+			fmt.Fprintln(os.Stderr, "missing outdir")
+			os.Exit(2)
+		}
+		outdir = args[1]
+		args = args[2:]
+	}
+	if len(args) < 2 {
+		fmt.Fprintln(os.Stderr, "usage: poc-extract [--outdir DIR] <file.flac> <tracknum>")
+		os.Exit(2)
+	}
+	src := args[0]
+	trk, err := strconv.Atoi(args[1])
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "invalid track number")
 		os.Exit(2)
@@ -43,10 +58,14 @@ func main() {
 		cueText = string(b)
 	}
 
-	tempDir, err := os.MkdirTemp("/tmp", "trackfs-extract-")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "cannot create temp dir:", err)
-		os.Exit(1)
+	tempDir := outdir
+	var tmpErr error
+	if tempDir == "" {
+		tempDir, tmpErr = os.MkdirTemp("/tmp", "trackfs-extract-")
+		if tmpErr != nil {
+			fmt.Fprintln(os.Stderr, "cannot create temp dir:", tmpErr)
+			os.Exit(1)
+		}
 	}
 	// keep temp dir for inspection; caller may cleanup
 	cuePath := filepath.Join(tempDir, "export.cue")

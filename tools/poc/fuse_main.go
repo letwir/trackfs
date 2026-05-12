@@ -330,10 +330,9 @@ func ensureTrackGenerated(src string, track int) (string, error) {
 		return "", err
 	}
 	// call poc-extract (or run logic inline); use existing poc-extract binary if present
-	exPath := "./poc-extract"
-	if p, err := exec.LookPath(exPath); err == nil {
-		cmd := exec.Command(p, src, strconv.Itoa(track))
-		cmd.Dir = tmpDir
+	exName := "poc-extract"
+	if p, err := exec.LookPath(exName); err == nil {
+		cmd := exec.Command(p, "--outdir", tmpDir, src, strconv.Itoa(track))
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
@@ -350,10 +349,7 @@ func ensureTrackGenerated(src string, track int) (string, error) {
 		}
 		return "", fmt.Errorf("no output file from extractor")
 	}
-	// fallback: run same logic inline (call shnsplit)
-	cmd := exec.Command("shnsplit", "-f", "-", "-o", "flac")
-	_ = cmd
-	return "", fmt.Errorf("extractor binary not found")
+	return "", fmt.Errorf("extractor binary not found in PATH")
 }
 
 // FS wrapper implementing fs.FS
