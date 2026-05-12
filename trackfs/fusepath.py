@@ -46,14 +46,16 @@ class Factory:
     def track_file_regex(self):
         separator_rex = self.track_separator.replace(".", "\\.")
         track_exentension_rex = self.track_extension.replace(".", "\\.")
+        # Use _ as title separator (not .) to avoid ambiguity with file extensions
         flac_cue_rex = (
             "^(?P<basename>.*)(?P<extension>"
             + self.album_extension
             + ")"
             + separator_rex
-            + "(?P<num>\\d+)(?P<title>(\\.[^\\.]{,"
+            + "(?P<num>\\d+)"
+            + "(?P<title>_([^_\\.\\/\\+\\&\\$\\`\\"\\|\\<\\>\\!\\;\\]{,"
             + str(self.max_title_len)
-            + "}?)?)"
+            + "}?))?"
             + track_exentension_rex
             + "$"
         )
@@ -78,7 +80,8 @@ class Factory:
         )
 
     def from_track(self, source_root: str, extension: str, track):
-        return FusePath(source_root, extension, True, track.num, track.title, self)
+        basename = os.path.basename(source_root)
+        return FusePath(basename, extension, True, track.num, track.title, self)
 
 
 _DEFAULT_FACTORY = Factory()
@@ -134,8 +137,8 @@ class FusePath:
             clean_title = unicodedata.normalize("NFKD", self.title)[
                 : self.max_title_len
             ]
-            return "." + "".join(
-                "_" if c in "[]\\/:*?%&$'`\"<>|+ 　" else c for c in clean_title
+            return "_" + "".join(
+                "_" if c in "[]\\/:*?%&$'\`\"<>|+  \u3000" else c for c in clean_title
             )  # 禁足文字とスペースを置換
 
     @property
