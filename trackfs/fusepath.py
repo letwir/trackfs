@@ -79,17 +79,18 @@ class Factory:
 
     @staticmethod
     def split_vpath(path):
+
         parts = path.strip("/").split("/")
+
         if parts == [""] or len(parts) == 0:
             return ("root",)
-        if len(parts) == 1:
-            return ("album", parts[0])
-        if len(parts) == 2:
-            return ("track", parts[0], parts[1])
-        return ("invalid",)
 
-    def from_track(self, source_root, extension, track):
-        return FusePath(source_root, extension, True, track.num, track.title, self)
+        filename = parts[-1]
+
+        if re.match(r"^\d+.*\.flac$", filename):
+            return ("track", "/".join(parts[:-1]), filename)
+
+        return ("album", "/".join(parts))
 
 
 _DEFAULT_FACTORY = Factory()
@@ -167,26 +168,6 @@ class FusePath:
 
     def dirname(self):
         return os.path.dirname(self.source_root)
-
-    def readdir(self):
-        entries = [".", ".."]
-        for filename in os.listdir(self.source):
-            (basename, extension) = os.path.splitext(filename)
-            filepath = os.path.join(self.source, filename)
-            if os.path.isfile(filepath) and self.album_ext_regex.fullmatch(extension):
-                trx = albuminfo.get(filepath).tracks()
-                if len(trx) > 0:
-                    entries.append(basename)
-                    for t in trx:
-                        entries.append(
-                            self._factory.from_track(basename, extension, t).vpath
-                        )
-                else:
-                    entries.append(filename)
-            else:
-                entries.append(filename)
-        log.debug(f"vdir entries:{entries}")
-        return entries
 
     def for_other_track(
         self, num: int, title: str, start: cuesheet.Time, end: cuesheet.Time
