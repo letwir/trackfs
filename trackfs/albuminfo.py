@@ -25,7 +25,7 @@ DEFAULT_IGNORE_TAGS_REX = re.compile("CUE_TRACK.*|COMMENT")
 
 
 class Error:
-    Parce: Exception = Exception
+    Parse: Exception = Exception
 
 
 class AlbumInfo:
@@ -60,9 +60,9 @@ class AlbumInfo:
             cue_bytes = fh.read()
         try:
             cue_str = cue_bytes.decode(chardet.detect(cue_bytes)["encoding"])
-        except:
+        except Exception:
             log.warning(
-                f'could not detect/decoode character set of cue sheet file "{cue_path}"'
+                f'warn: {Exception}\ncould not detect/decoode character set of cue sheet file "{cue_path}"'
             )
             return None
         log.debug(f"cue-sheet:\n{cue_str}")
@@ -84,9 +84,9 @@ class AlbumInfo:
             result = cuesheet.parse(raw_cue, meta.info.length)
         # あまりにもエラーが多い箇所なので一般的なExceptionを利用する。
         # 何が起こってるのかさっぱり分からん
-        except Error.Parce:
+        except Exception:
             log.warning(
-                f"could not parse cue sheet; ignore cue sheet: {Error.Parce}\n{raw_cue}"
+                f"could not parse cue sheet; ignore cue sheet: {Exception}\n{raw_cue}"
             )
             return None
         log.debug(f"parsed cue sheet from FLAC file:\n{result}")

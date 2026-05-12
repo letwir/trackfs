@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from math import trunc
 from subprocess import DEVNULL, run
 from tempfile import mkstemp
-from threading import RLock, Thread
+from threading import Event, RLock, Thread
 from typing import Dict, Optional, Tuple
 
 import psutil
@@ -66,7 +66,7 @@ class TrackManager:
 
     def __init__(self) -> None:
         self.rwlock: RLock = RLock()
-        self.registry: Dict[os.PathLike, TrackInfo or None] = {}
+        self.registry: Dict[os.PathLike, TrackInfo or Event] = {}
         self.preload_pool: ThreadPoolExecutor = ThreadPoolExecutor(
             max_workers=cputhread, thread_name_prefix="preload"
         )
@@ -289,20 +289,30 @@ class TrackManager:
                 elif self._is_registered(path):
                     # we already have cached that track =>
                     # register additional usage
-                    return self._change_usage(path, +1).temp_file_path
+                    result = self._change_usage(path, +1).temp_file_path
 
-            # give other thread time to finish processing
-            time.sleep(0.5)
         album_info = albuminfo.get(fp.source)
         audio_format = album_info.format()
-        if audio_format == "WAVE":
-            return self._extract_wave_track(path, fp, album_info)
-        elif audio_format == "FLAC":
-            return self._extract_flac_track(path, fp, album_info)
-        else:
-            err_msg = f'unexpected audio format "{audio_format}"; can\'t proceed'
-            log.error(err_msg)
-            raise FlacSplitException(err_msg)
+
+        try:
+            if audio_format == "WAVE":
+                result = self._extract_wave_track(path, fp, album_info)
+            elif audio_format == "FLAC":
+                result = self._extract_flac_track(path, fp, album_info)
+            else:
+                err_msg = f'unexpected audio format "{audio_format}"; can\'t proceed'
+                log.error(err_msg)
+                raise FlacSplitException(err_msg)
+            return result
+        finally:
+            # 成功・失敗に関わらず、待機中のスレッドを解放する
+            with self.rwlock:
+                ev = self.registry.get(path)
+                if isinstance(ev, Event):
+                    ev.set()
+                # 失敗時に registry に Event が残ったままだとデッドロックや
+                # 無限ループの原因になるため、失敗時は del する必要がある
+                # (注: _extract_xxx 内で失敗時に del self[path] している既存仕様を維持)
 
     def release_track(self, path: os.PathLike, fp: FusePath):
         log.info(f'release track "{path}"')
@@ -346,8 +356,15 @@ class TrackManager:
         if next_track is None:
             log.debug(f'got last track: "{fp.num}"; no preload')
             return
-
-        file_size = os.stat(self[path].temp_file_path).st_size
+        info = self.get(path)
+        if info is None:
+            log.debug(f'track "{path}" disappeared before preload check')
+            return
+        try:
+            file_size = os.stat(info.temp_file_path).st_size
+        except FileNotFoundError:
+            log.debug(f'temp file for "{path}" already removed')
+            return
         if (
             1.0 - (float(offset) / float(file_size))
         ) * track.duration > self.preload_lead_time:

@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import os
+from collections import defaultdict
 from dataclasses import dataclass
 from threading import RLock
 
@@ -28,7 +29,7 @@ log = logging.getLogger(__name__)
 @dataclass
 class OpenFileInfo:
     position: int = 0
-    lock: RLock = RLock()
+    lock = defaultdict(RLock)
 
 
 class TrackFSOps(Operations):
@@ -95,7 +96,7 @@ class TrackFSOps(Operations):
         log.info(f'open file "{path}"')
         # We don't want FlacTrackFS messing with actual data.
         # Only allow Read-Only access.
-        if (flags | os.O_RDONLY) == 0:
+        if not (flags & os.O_RDONLY):
             raise ValueError("Can only open files read-only.")
         fp = self._fusepath(path)
         if fp.is_track:

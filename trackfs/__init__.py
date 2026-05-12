@@ -7,7 +7,6 @@
 # See https://github.com/letwir/trackfs for details.
 #
 
-from __future__ import absolute_import, division, print_function
 
 from .fuseops import TrackFSOps
 
