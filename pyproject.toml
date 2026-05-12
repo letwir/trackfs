@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trackfs"
+version = "0.1.0"  # VERSION ファイルを読むなら後述
+description = "A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track"
+readme = "README.py.md"
+requires-python = ">=3.8"
+authors = [
+    { name = "Andreas Schmidt" },
+    { name = "letwir" }
+]
+license = { text = "LGPL-3.0-or-later" }
+keywords = ["FUSE", "FLAC", "CUE", "filesystem"]
+
+dependencies = [
+    "mutagen",
+    "fuse",
+    "Lark",
+    "chardet",
+    "psutils",
+]
+
+[project.urls]
+Homepage = "https://github.com/letwir/trackfs"
+
+[project.scripts]
+trackfs = "trackfs.__init__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]

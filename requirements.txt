@@ -1,0 +1,5 @@
+mutagen
+fusepy
+Lark
+chardet
+psutil

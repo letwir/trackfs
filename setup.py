@@ -1,4 +1,4 @@
-# 
+#
 # Copyright 2020-2021 by Andreas Schmidt
 # All rights reserved.
 # This file is part of the trackfs project
@@ -16,7 +16,7 @@ def slurp(fn):
 setuptools.setup(
     name="trackfs",
     version=slurp("VERSION"),
-    author="Andreas Schmidt",
+    authors="Andreas Schmidt, letwir"
     author_email="author@example.com",
     description="A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track",
     long_description=slurp("README.py.md"),
@@ -24,7 +24,7 @@ setuptools.setup(
     url="https://github.com/letwir/trackfs",
     packages=setuptools.find_packages(),
     install_requires=[
-        "mutagen", "fusepy", "Lark", "chardet", "psutil"
+        "mutagen", "fuse", "Lark", "chardet", "psutils"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
