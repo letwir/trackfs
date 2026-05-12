@@ -201,7 +201,7 @@ type FS struct {
 	root *RootDir
 }
 
-func (f *FS) Root(ctx context.Context) (fs.Node, error) {
+func (f *FS) Root() (fs.Node, error) {
 	return f.root, nil
 }
 
