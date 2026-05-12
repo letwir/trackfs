@@ -16,7 +16,7 @@ def slurp(fn):
 setuptools.setup(
     name="trackfs",
     version=slurp("VERSION"),
-    authors="Andreas Schmidt, letwir"
+    authors="Andreas Schmidt"
     author_email="author@example.com",
     description="A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track",
     long_description=slurp("README.py.md"),
