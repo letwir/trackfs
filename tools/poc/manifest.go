@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type TrackEntry struct {
@@ -47,15 +50,10 @@ func sanitizeForFs(s string) string {
 }
 
 func stringReplaceAll(s, old, new string) string {
-	return filepath.ToSlash(s) // placeholder; keep simple for PoC
+	return strings.ReplaceAll(s, old, new)
 }
 
 // getTracks uses the existing poc-metaflac parsing
-import (
-	"bytes"
-	"encoding/json"
-	"os/exec"
-)
 
 func getTracks(src string) []struct{Number int; Title string} {
 	cmdPath := "./poc-metaflac"
