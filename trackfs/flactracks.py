@@ -21,14 +21,14 @@ from tempfile import mkstemp
 from threading import Event, RLock, Thread
 from typing import Dict, Optional, Tuple
 
-import psutil
+import psutils
 
 from . import albuminfo
 from .cuesheet import Track
 from .fusepath import FusePath
 
 log = logging.getLogger(__name__)
-cputhread = psutil.cpu_count()
+cputhread = psutils.cpu_count()
 
 
 class FlacSplitException(Exception):
@@ -54,7 +54,7 @@ class TrackManager:
 
     """
 
-    # CPU論理コア数の格納。ここ以外でpsutilを使わない。
+    # CPU論理コア数の格納。ここ以外でpsutilsを使わない。
     #  マルチスレッド機能を仮実装 " -j XX "
     DEFAULT_FLAC_THREADS = f"-j {cputhread}"
     # flacエンコード引数.  --silent --force --fastの意味
