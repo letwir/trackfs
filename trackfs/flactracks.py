@@ -7,29 +7,29 @@
 # See https://github.com/andresch/trackfs for details.
 #
 
+import logging
 import os
 import shlex
 import time
 import wave
-import psutil
-
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from math import trunc
-from tempfile import mkstemp
 from subprocess import DEVNULL, run
-from concurrent.futures import ThreadPoolExecutor
-from typing import Tuple, Dict, Optional
+from tempfile import mkstemp
 from threading import RLock, Thread
+from typing import Dict, Optional, Tuple
+
+import psutil
 
 from . import albuminfo
-from .fusepath import FusePath
 from .cuesheet import Track
-
-import logging
+from .fusepath import FusePath
 
 log = logging.getLogger(__name__)
 # CPU論理コア数の格納。
 cpu_cores = str(psutil.cpu_count())
+
 
 class FlacSplitException(Exception):
     pass
@@ -62,7 +62,9 @@ class TrackManager:
     def __init__(self) -> None:
         self.rwlock: RLock = RLock()
         self.registry: Dict[os.PathLike, TrackInfo or None] = {}
-        self.preload_pool: ThreadPoolExecutor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="preload")
+        self.preload_pool: ThreadPoolExecutor = ThreadPoolExecutor(
+            max_workers=2, thread_name_prefix="preload"
+        )
         self.preloaded_next_tracks: Dict[os.PathLike, FusePath] = {}
         self.preload_lead_time: int = TrackManager.DEFAULT_PRELOAD_LEAD_TIME
         self.temp_file_ttl: int = TrackManager.DEFAULT_TEMP_FILE_TTL
@@ -76,7 +78,9 @@ class TrackManager:
             while still_in_use:
                 with self.rwlock:
                     info = self.registry[key]
-                if info.ref_count <= 0 and (time.time() - info.last_accessed > self.temp_file_ttl):
+                if info.ref_count <= 0 and (
+                    time.time() - info.last_accessed > self.temp_file_ttl
+                ):
                     still_in_use = False
                 else:
                     time.sleep(self.temp_file_ttl / 2)
@@ -137,7 +141,9 @@ class TrackManager:
         tags = album_info.track_tags(num)
 
         log.debug(f"tags for current track: {tags}")
-        return ' '.join([TrackManager._tag_as_flac_arg(k, v) for k, vs in tags.items() for v in vs])
+        return " ".join(
+            [TrackManager._tag_as_flac_arg(k, v) for k, vs in tags.items() for v in vs]
+        )
 
     @staticmethod
     def _new_temp_filename() -> os.PathLike:
@@ -151,13 +157,16 @@ class TrackManager:
     @staticmethod
     def _find_albmum_art(fp: FusePath) -> Optional[os.PathLike]:
         for fn in [
-            fp.source_root+".jpg",
-            os.path.dirname(fp.source_root)+'folder.jpg'
+            fp.source_root + ".jpg",
+            os.path.dirname(fp.source_root) + "folder.jpg",
         ]:
-            if os.path.exists(fn): return fn
+            if os.path.exists(fn):
+                return fn
         return None
 
-    def _extract_flac_track(self, path: os.PathLike, fp: FusePath, album_info: albuminfo.AlbumInfo) -> os.PathLike:
+    def _extract_flac_track(
+        self, path: os.PathLike, fp: FusePath, album_info: albuminfo.AlbumInfo
+    ) -> os.PathLike:
         """creates a real file for a given virtual track file
 
         extracts the track from the underlying FLAC+CUE file into
@@ -185,10 +194,10 @@ class TrackManager:
         #  encodeにマルチスレッド機能を仮実装 " -j XX "
         #  論理コアをpsutilで取得して使っている。
         flac_cmd = (
-            f'flac -dscF --skip={track.start.flac_time()}'
+            f"flac -dscF --skip={track.start.flac_time()}"
             f'  --until={track.end.flac_time()} "{fp.source}" '
-            f'| flac -sf0j {cpu_cores}'
-            f'  {self.track_tags_as_flac_args(album_info,fp.num)}{picture_arg} -o {track_file} -'
+            f"| flac -sf0j {cpu_cores}"
+            f"  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o {track_file} -"
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
         rc = run(flac_cmd, shell=True, stdout=None, stderr=DEVNULL).returncode
@@ -205,7 +214,9 @@ class TrackManager:
 
         return track_file
 
-    def _extract_wave_track(self, path: os.PathLike, fp: FusePath, album_info: albuminfo.AlbumInfo) -> os.PathLike:
+    def _extract_wave_track(
+        self, path: os.PathLike, fp: FusePath, album_info: albuminfo.AlbumInfo
+    ) -> os.PathLike:
         """creates a real file for a given virtual track file
 
         extracts the track from the underlying WAVE  file and associated CUE-Sheet into
@@ -224,21 +235,27 @@ class TrackManager:
             picture_arg = ""
 
         wave_track_file = self._new_temp_filename()
-        with wave.open(fp.source, 'r') as wav_in:
+        with wave.open(fp.source, "r") as wav_in:
             params = wav_in.getparams()
             wav_in.setpos(trunc(track.start.seconds() * params.framerate))
             nframes = trunc(track.duration.seconds() * params.framerate)
-            with wave.open(wave_track_file, 'w') as wav_out:
-                out_params = (params.nchannels, params.sampwidth, params.framerate,
-                                nframes, params.comptype, params.compname)
+            with wave.open(wave_track_file, "w") as wav_out:
+                out_params = (
+                    params.nchannels,
+                    params.sampwidth,
+                    params.framerate,
+                    nframes,
+                    params.comptype,
+                    params.compname,
+                )
                 wav_out.setparams(out_params)
-                chunk_size = 512*1025
+                chunk_size = 512 * 1025
                 while nframes > 0:
                     wav_out.writeframes(wav_in.readframes(min(nframes, chunk_size)))
                     nframes -= chunk_size
 
         flac_cmd = (
-            f'flac -sf0j {cpu_cores}'
+            f"flac -sf0j {cpu_cores}"
             f'  {self.track_tags_as_flac_args(album_info, fp.num)}{picture_arg} -o "{track_file}" "{wave_track_file}"'
         )
         log.debug(f'extracting track with command: "{flac_cmd}"')
@@ -273,9 +290,9 @@ class TrackManager:
             time.sleep(0.5)
         album_info = albuminfo.get(fp.source)
         audio_format = album_info.format()
-        if audio_format == 'WAVE':
+        if audio_format == "WAVE":
             return self._extract_wave_track(path, fp, album_info)
-        elif audio_format == 'FLAC':
+        elif audio_format == "FLAC":
             return self._extract_flac_track(path, fp, album_info)
         else:
             err_msg = f'unexpected audio format "{audio_format}"; can\'t proceed'
@@ -295,7 +312,9 @@ class TrackManager:
                     del self.preloaded_next_tracks[path]
 
     @staticmethod
-    def _find_this_and_next_track(album_info: albuminfo.AlbumInfo, num: int) -> Tuple[Track or None, Track or None]:
+    def _find_this_and_next_track(
+        album_info: albuminfo.AlbumInfo, num: int
+    ) -> Tuple[Track or None, Track or None]:
         log.info(f'checking for subsequent track of track "{num}"')
         tracks = album_info.tracks()
         if tracks is not None:
@@ -309,10 +328,12 @@ class TrackManager:
                 i += 1
             return track, tracks[i] if i < total_tracks else None
         else:
-            log.warning('could not find any tracks')
+            log.warning("could not find any tracks")
             return None, None
 
-    def _do_check_next_track(self, path: os.PathLike, fp: FusePath, offset: int) -> None:
+    def _do_check_next_track(
+        self, path: os.PathLike, fp: FusePath, offset: int
+    ) -> None:
         log.info(f'_do_check_next_track: "{path}" [{offset}]')
 
         album_info = albuminfo.get(fp.source)
@@ -322,8 +343,12 @@ class TrackManager:
             return
 
         file_size = os.stat(self[path].temp_file_path).st_size
-        if (1.0 - (float(offset) / float(file_size))) * track.duration > self.preload_lead_time:
-            log.debug(f'more than ~{self.preload_lead_time} seconds to play; no preload')
+        if (
+            1.0 - (float(offset) / float(file_size))
+        ) * track.duration > self.preload_lead_time:
+            log.debug(
+                f"more than ~{self.preload_lead_time} seconds to play; no preload"
+            )
             return
 
         with self.rwlock:
@@ -334,7 +359,10 @@ class TrackManager:
 
             log.debug(f'preloading next track "{next_track.num}"')
             next_fp = fp.for_other_track(
-                next_track.num, next_track.title, next_track.start, next_track.end,
+                next_track.num,
+                next_track.title,
+                next_track.start,
+                next_track.end,
             )
             self.preloaded_next_tracks[path] = next_fp
 

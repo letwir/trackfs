@@ -7,84 +7,108 @@
 # See https://github.com/andresch/trackfs for details.
 #
 
-from __future__ import print_function, absolute_import, division
+from __future__ import absolute_import, division, print_function
 
 from .fuseops import TrackFSOps
 
 
 def main(foreground=True, allow_other=True):
+    import argparse
+    import logging
     import os
     import sys
-    import argparse
 
-    from fuse import FUSE
+    try:
+        import pyfuse3
+
+        use_pyfuse3 = True
+    except Exception:
+        use_pyfuse3 = False
+
     from . import fusepath
 
-    import logging
     log = logging.getLogger(__name__)
 
     parser = argparse.ArgumentParser(
-        description='''A FUSE filesystem for extracting individual tracks from FLAC+CUE files.
+        description="""A FUSE filesystem for extracting individual tracks from FLAC+CUE files.
 
         Maps a directory to a mount point while replacing all FLAC+CUE files (with
-        embedded cue sheets) with multiple FLAC files for the individual tracks''')
+        embedded cue sheets) with multiple FLAC files for the individual tracks"""
+    )
     parser.add_argument(
-        '-s', '--separator', dest='separator', default=fusepath.DEFAULT_TRACK_SEPARATOR,
+        "-s",
+        "--separator",
+        dest="separator",
+        default=fusepath.DEFAULT_TRACK_SEPARATOR,
         help=(
-            f'The separator used inside the name of the track-files. '
+            f"The separator used inside the name of the track-files. "
             f'Must never occur in regular filenames (default: "{fusepath.DEFAULT_TRACK_SEPARATOR}")'
-        )
+        ),
     )
     parser.add_argument(
-        '-i', '--ignore-tags', dest='ignore', default='CUE_TRACK.*|COMMENT',
+        "-i",
+        "--ignore-tags",
+        dest="ignore",
+        default="CUE_TRACK.*|COMMENT",
         help=(
-            'A regular expression for tags that will not be '
+            "A regular expression for tags that will not be "
             'copied to the track FLACs (default: "CUE_TRACK.*|COMMENT")'
-        )
+        ),
     )
     parser.add_argument(
-        '-e', '--extension', dest='extension', default=fusepath.DEFAULT_ALBUM_EXTENSION,
-        help=f'A regular expression to identify file extensions of of album files (default: "{fusepath.DEFAULT_ALBUM_EXTENSION}")'
+        "-e",
+        "--extension",
+        dest="extension",
+        default=fusepath.DEFAULT_ALBUM_EXTENSION,
+        help=f'A regular expression to identify file extensions of of album files (default: "{fusepath.DEFAULT_ALBUM_EXTENSION}")',
     )
     parser.add_argument(
-        '-k', '--keep-album', dest='keep', action='store_true',
-        help='Keep the source album file (FLAC+CUE or WAVE) in the mapped filesystem'
+        "-k",
+        "--keep-album",
+        dest="keep",
+        action="store_true",
+        help="Keep the source album file (FLAC+CUE or WAVE) in the mapped filesystem",
     )
     parser.add_argument(
-        '-t', '--title-length', dest='title_length', default=fusepath.DEFAULT_MAX_TITLE_LEN,
-        help=f'Nr. of characters of the track title in filename of track (default: {fusepath.DEFAULT_MAX_TITLE_LEN})'
+        "-t",
+        "--title-length",
+        dest="title_length",
+        default=fusepath.DEFAULT_MAX_TITLE_LEN,
+        help=f"Nr. of characters of the track title in filename of track (default: {fusepath.DEFAULT_MAX_TITLE_LEN})",
     )
     parser.add_argument(
-        '--root-allowed', dest='rootok', action='store_true',
+        "--root-allowed",
+        dest="rootok",
+        action="store_true",
         help=(
-            'Allow running as with root permissions; Neither necessary nor recommended. '
-            'Use only when you know what you are doing'
-        )
+            "Allow running as with root permissions; Neither necessary nor recommended. "
+            "Use only when you know what you are doing"
+        ),
     )
     parser.add_argument(
-        '-v', '--verbose', dest='verbose', action='store_true',
-        help='Activate info-level logging'
+        "-v",
+        "--verbose",
+        dest="verbose",
+        action="store_true",
+        help="Activate info-level logging",
     )
     parser.add_argument(
-        '-d', '--debug', dest='debug', action='store_true',
-        help='Activate debug-level logging'
+        "-d",
+        "--debug",
+        dest="debug",
+        action="store_true",
+        help="Activate debug-level logging",
     )
-    parser.add_argument(
-        'root',
-        help='The root of the directory tree to be mapped'
-    )
-    parser.add_argument(
-        'mount',
-        help='The mount point for the mapped directory tree'
-    )
+    parser.add_argument("root", help="The root of the directory tree to be mapped")
+    parser.add_argument("mount", help="The mount point for the mapped directory tree")
     args = parser.parse_args()
 
-    log_fmt = '{levelname:6s}[{threadName:15s}]({module:10}) {message}'
+    log_fmt = "{levelname:6s}[{threadName:15s}]({module:10}) {message}"
     if args.debug:
-        logging.basicConfig(format=log_fmt, style='{', level=logging.DEBUG )
+        logging.basicConfig(format=log_fmt, style="{", level=logging.DEBUG)
         log.setLevel(logging.DEBUG)
     elif args.verbose:
-        logging.basicConfig(format=log_fmt, style='{', level=logging.INFO )
+        logging.basicConfig(format=log_fmt, style="{", level=logging.INFO)
         log.setLevel(logging.INFO)
 
     if os.geteuid() == 0 and not args.rootok:
@@ -92,18 +116,52 @@ def main(foreground=True, allow_other=True):
             f'''By default {os.path.basename(sys.argv[0])} don't allow to run with root permissions.
 
 If you are absolutely sure that that's what you want, use the option "--root-allowed"''',
-            file=sys.stderr
+            file=sys.stderr,
         )
         exit(1)
 
     trackfs = TrackFSOps(
         args.root,
-        keep_album=args.keep, separator=args.separator, album_extension=args.extension,
-        title_length=int(args.title_length), tags_ignored=args.ignore
+        keep_album=args.keep,
+        separator=args.separator,
+        album_extension=args.extension,
+        title_length=int(args.title_length),
+        tags_ignored=args.ignore,
     )
 
-    fuse = FUSE(trackfs, args.mount, foreground=foreground, allow_other=allow_other)
+    if use_pyfuse3:
+        # Use pyfuse3 async backend
+        import asyncio
+
+        import pyfuse3 as _pyfuse3
+
+        ops = None
+        # adapt existing TrackFSOps to pyfuse3 if a pyfuse3-specific class exists
+        try:
+            from .pyfuse3ops import PyTrackFS
+
+            ops = PyTrackFS(
+                args.root,
+                keep_album=args.keep,
+                separator=args.separator,
+                album_extension=args.extension,
+                title_length=int(args.title_length),
+                tags_ignored=args.ignore,
+            )
+        except Exception:
+            # fallback: try to wrap synchronous TrackFSOps (less optimal)
+            ops = trackfs
+
+        _pyfuse3.init(ops, args.mount)
+        try:
+            asyncio.run(_pyfuse3.main())
+        finally:
+            _pyfuse3.close()
+    else:
+        from fuse import FUSE
+
+        fuse = FUSE(trackfs, args.mount, foreground=foreground, allow_other=allow_other)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

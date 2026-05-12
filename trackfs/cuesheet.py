@@ -17,15 +17,13 @@
 # https://web.archive.org/web/20070614044112/http://www.goldenhawk.com/download/cdrwin.pdf
 #
 
+import logging
 import math
 from dataclasses import dataclass, field
 from functools import cached_property
+from typing import Any, Dict, List
 
 from lark import Lark, Transformer
-
-import logging
-
-from typing import List, Any, Dict
 
 log = logging.getLogger(__name__)
 
@@ -105,12 +103,14 @@ _CUE_LARK_GRAMMAR = r"""
    %import common.WS
    %ignore WS"""
 
-_CUE_LARK_PARSER = Lark(_CUE_LARK_GRAMMAR, start='cue_sheet')
+_CUE_LARK_PARSER = Lark(_CUE_LARK_GRAMMAR, start="cue_sheet")
 
 
 class TagTools:
     @staticmethod
-    def object_tags(o: object, names: Dict[str, str] or List[str] = None) -> Dict[str, List[str]]:
+    def object_tags(
+        o: object, names: Dict[str, str] or List[str] = None
+    ) -> Dict[str, List[str]]:
         tags = {}
         if names is None:
             names = dir(o)
@@ -118,11 +118,11 @@ class TagTools:
             names = zip(names, names)
         else:
             names = names.items()
-        for (attr, tag) in names:
+        for attr, tag in names:
             value = getattr(o, attr, None)
             if isinstance(value, List):
                 # hacky way to get rid of plural s
-                tags[tag[0: -1].upper()] = value
+                tags[tag[0:-1].upper()] = value
             elif value is not None:
                 tags[tag.upper()] = [value]
         return tags
@@ -130,10 +130,9 @@ class TagTools:
 
 @dataclass
 class CueSheet:
-    """Meta data from a parsed cue sheet
+    """Meta data from a parsed cue sheet"""
 
-    """
-    tracks: List['Track'] = field(default_factory=list)
+    tracks: List["Track"] = field(default_factory=list)
     albumartists: List[str] = None
     album: str = None
     composers: List[str] = None
@@ -147,13 +146,14 @@ class CueSheet:
         for i in range(0, len(self.tracks) - 1):
             curr = self.tracks[i]
             curr.end = self.tracks[i + 1].start
-        last = self.tracks[-1];
+        last = self.tracks[-1]
         last.end = Time.create(disc_duration)
         return self
 
     def tags(self):
-        return TagTools.object_tags(self, [
-            t for t in vars(self).keys() if t != 'tracks'])
+        return TagTools.object_tags(
+            self, [t for t in vars(self).keys() if t != "tracks"]
+        )
 
 
 @dataclass
@@ -186,22 +186,28 @@ class Track:
     composers: List[str] = None
     title: List[str] = None
     isrc: str = None
-    start: 'Time' = None
-    end: 'Time' = None
+    start: "Time" = None
+    end: "Time" = None
 
     @cached_property
-    def duration(self) -> 'Time':
+    def duration(self) -> "Time":
         return self.end - self.start
 
     def tags(self):
-        return TagTools.object_tags(self,
-                                    {'artists': 'artists', 'composers': 'composers',
-                                     'title': 'title', 'num': 'tracknumber'})
+        return TagTools.object_tags(
+            self,
+            {
+                "artists": "artists",
+                "composers": "composers",
+                "title": "title",
+                "num": "tracknumber",
+            },
+        )
 
 
 @dataclass(frozen=True)
 class Time:
-    """ Timestamp / duration information with CD frame accuracy
+    """Timestamp / duration information with CD frame accuracy
 
     Attributes
     ----------
@@ -256,10 +262,10 @@ class Time:
         return (60.0 * self.mm) + self.ss + (self.ff / 100.0)
 
     def flac_time(self):
-        return f'{self.mm:02d}:{self.ss:02d}.{int(100.0 / 75.0 * self.ff):02d}'
+        return f"{self.mm:02d}:{self.ss:02d}.{int(100.0 / 75.0 * self.ff):02d}"
 
     def __repr__(self):
-        return '%02d%02d%02d' % (self.mm, self.ss, self.ff)
+        return "%02d%02d%02d" % (self.mm, self.ss, self.ff)
 
     def __add__(self, other):
         (cs, ff) = divmod(self.ff + other.ff, 75)
@@ -272,7 +278,7 @@ class Time:
         return Time(
             self.mm - other.mm - (0 if ss > 0 else 1),
             ss if ss >= 0 else ss + 60,
-            ff if ff >= 0 else ff + 75
+            ff if ff >= 0 else ff + 75,
         )
 
 
@@ -303,50 +309,52 @@ class _CueTransformer(Transformer):
         return True
 
     ALBUM_MAPPINGS = {
-        'performer': ("albumartists", True),
-        'songwriter': ("composers", True),
-        'title': ("album", False),
-        'catalog': ("catalog", False)
+        "performer": ("albumartists", True),
+        "songwriter": ("composers", True),
+        "title": ("album", False),
+        "catalog": ("catalog", False),
     }
 
     COMMENT_MAPPINGS = {
-        'discid': ("discid", False),
-        'date': ("year", False),
-        'discnumber': ("discnumber", False),
-        'totaldiscs': ("totaldiscs", False)
+        "discid": ("discid", False),
+        "date": ("year", False),
+        "discnumber": ("discnumber", False),
+        "totaldiscs": ("totaldiscs", False),
     }
 
     def cue_sheet(self, subtrees):
-        args = {'tracks': subtrees[1].children}
+        args = {"tracks": subtrees[1].children}
         for entry in subtrees[0].children:
             (name, value) = (entry.data.lower(), entry.children[0])
             if _CueTransformer._map_to_arg(args, self.ALBUM_MAPPINGS, name, value):
                 pass
-            elif name == 'comment':
+            elif name == "comment":
                 # extract known key-value comments
-                splits = value.split(' ', 1)
+                splits = value.split(" ", 1)
                 if len(splits) > 1:
-                    _CueTransformer._map_to_arg(args, self.COMMENT_MAPPINGS, splits[0].lower(), splits[1])
+                    _CueTransformer._map_to_arg(
+                        args, self.COMMENT_MAPPINGS, splits[0].lower(), splits[1]
+                    )
         return CueSheet(**args)
 
     TRACK_MAPPINGS = {
-        'performer': ("artists", True),
-        'songwriter': ("composers", True),
-        'title': ("title", False),
-        'isrc': ("isrc", False)
+        "performer": ("artists", True),
+        "songwriter": ("composers", True),
+        "title": ("title", False),
+        "isrc": ("isrc", False),
     }
 
     def track(self, subtrees):
-        args = {'num': subtrees[0], 'type': subtrees[1]}
+        args = {"num": subtrees[0], "type": subtrees[1]}
         for entry in subtrees[2].children:
             (name, value) = (entry.data.lower(), entry.children[0])
             if _CueTransformer._map_to_arg(args, self.TRACK_MAPPINGS, name, value):
                 pass
-            elif name == 'index':
+            elif name == "index":
                 idx = entry.children
                 # we're only interested in index 1
                 if idx[0] == 1:
-                    args['start'] = idx[1]
+                    args["start"] = idx[1]
         return Track(**args)
 
     def mmssff(self, elems):
@@ -367,12 +375,14 @@ class _CueTransformer(Transformer):
 
 
 def parse(cuesheet, disc_total_length):
-    return _CueTransformer(visit_tokens=True
-                           ).transform(_CUE_LARK_PARSER.parse(cuesheet)
-                                       ).calc_track_times(disc_total_length)
+    return (
+        _CueTransformer(visit_tokens=True)
+        .transform(_CUE_LARK_PARSER.parse(cuesheet))
+        .calc_track_times(disc_total_length)
+    )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_cue = r"""REM DISCID A10A2E0D
     PERFORMER "Zaz"
     TITLE "Paris"
@@ -395,9 +405,5 @@ if __name__ == '__main__':
         INDEX 01 02:58:68"""
 
     print(
-        _CueTransformer(
-            visit_tokens=True
-        ).transform(
-            _CUE_LARK_PARSER.parse(test_cue)
-        )
+        _CueTransformer(visit_tokens=True).transform(_CUE_LARK_PARSER.parse(test_cue))
     )
