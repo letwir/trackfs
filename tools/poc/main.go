@@ -300,11 +300,12 @@ type PassthroughHandle struct {
 }
 
 func (h *PassthroughHandle) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	n, err := h.fd.ReadAt(req.Data, req.Offset)
+	buf := make([]byte, req.Size)
+	n, err := h.fd.ReadAt(buf, req.Offset)
 	if err != nil && err != io.EOF {
 		return fuse.EIO
 	}
-	resp.Data = req.Data[:n]
+	resp.Data = buf[:n]
 	return nil
 }
 
