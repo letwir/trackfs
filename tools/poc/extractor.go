@@ -94,15 +94,37 @@ func main() {
 }
 
 func getCueFromMetaflac(path string) (string, error) {
+	// Try direct call first
 	cmd := exec.Command("metaflac", "--show-tag=CUESHEET", path)
 	b, err := cmd.Output()
+	if err == nil {
+		out := string(b)
+		out = strings.ReplaceAll(out, "\r\n", "\n")
+		if strings.HasPrefix(out, "CUESHEET=") {
+			out = strings.TrimPrefix(out, "CUESHEET=")
+			out = strings.TrimPrefix(out, "\"")
+			out = strings.TrimSuffix(out, "\"\n")
+		}
+		if strings.TrimSpace(out) != "" {
+			return out, nil
+		}
+	}
+
+	// Fallback: chdir to the source's directory and run metaflac with basename.
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	oldwd, _ := os.Getwd()
+	defer func() { _ = os.Chdir(oldwd) }()
+	if err := os.Chdir(dir); err != nil {
+		return "", err
+	}
+	cmd = exec.Command("metaflac", "--show-tag=CUESHEET", base)
+	b, err = cmd.Output()
 	if err != nil {
 		return "", err
 	}
-	// metaflac emits like "CUESHEET=..." per tag; if so, strip leading "CUESHEET="
 	out := string(b)
 	out = strings.ReplaceAll(out, "\r\n", "\n")
-	// if output lines start with "CUESHEET=", remove that prefix and possible leading quotes
 	if strings.HasPrefix(out, "CUESHEET=") {
 		out = strings.TrimPrefix(out, "CUESHEET=")
 		out = strings.TrimPrefix(out, "\"")
