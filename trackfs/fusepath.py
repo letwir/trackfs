@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 #
 # Copyright 2020-2021 by Andreas Schmidt
-# ...And Modified 2024-2025 letwir
 # All rights reserved.
 # This file is part of the trackfs project
 # and licensed under the terms of the GNU Lesser General Public License v3.0.
-# See https://github.com/letwir/trackfs for details.
+# See https://github.com/andresch/trackfs for details.
 #
 
 #
@@ -17,17 +16,19 @@
 import logging
 import os
 import re
+import string
 import unicodedata
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import cached_property
 
 from . import albuminfo, cuesheet
 
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR: str = "/"
+DEFAULT_TRACK_SEPARATOR: str = ".#-#."
 DEFAULT_MAX_TITLE_LEN: int = 20
 DEFAULT_ALBUM_EXTENSION: str = "(?i:\\.flac|\\.wav)"
+DEFAULT_VALID_CHARS: str = "-_() " + string.ascii_letters + string.digits
 DEFAULT_KEEP_ALBUM: bool = False
 DEFAULT_TRACK_EXTENSION: str = ".flac"
 
@@ -39,24 +40,22 @@ class Factory:
     track_separator: str = DEFAULT_TRACK_SEPARATOR
     max_title_len: int = DEFAULT_MAX_TITLE_LEN
     album_extension: str = DEFAULT_ALBUM_EXTENSION
+    valid_filename_chars: str = DEFAULT_VALID_CHARS
     keep_album: bool = DEFAULT_KEEP_ALBUM
-    track_extension: str = DEFAULT_TRACK_EXTENSION
+    track_extension: bool = DEFAULT_TRACK_EXTENSION
 
     @cached_property
     def track_file_regex(self):
         separator_rex = self.track_separator.replace(".", "\\.")
         track_exentension_rex = self.track_extension.replace(".", "\\.")
-        # Use _ as title separator (not .) to avoid ambiguity with file extensions
         flac_cue_rex = (
-            r"^(?P<basename>.*)(?P<extension>"
-            + self.album_extension
-            + r")"
-            + separator_rex
-            + r"(?P<num>\d+)"
-            + r"(?P<title>_([^_.\[\]\\/:*?%&$'`\"<>|+]{"
+            "^(?P<basename>.*?)/"
+            "(?P<num>\\d+)"
+            "(?P<title>(\\.[^\\.]{,"
             + str(self.max_title_len)
-            + r"}))?"
+            + "}?)?)"
             + track_exentension_rex
+            + "$"
         )
         log.debug("Factory.track_file_regex: " + flac_cue_rex)
         return re.compile(flac_cue_rex)
@@ -65,7 +64,7 @@ class Factory:
     def album_ext_regex(self):
         return re.compile(self.album_extension)
 
-    def from_vpath(self, path: str):
+    def from_vpath(self, path):
         """Construct a FusePath instance from a given virtual path"""
         match = self.track_file_regex.match(path)
         if match is None:
@@ -73,14 +72,24 @@ class Factory:
             (root, ext) = os.path.splitext(path)
             return FusePath(root, ext, _factory=self)
         log.debug(f'track file in "{path}"')
-        title = match["title"] or ""
+        title = match["title"].lstrip()
         return FusePath(
-            match["basename"], match["extension"], True, int(match["num"]), title, self
+            match["basename"], ".flac", True, int(match["num"]), title, self
         )
 
-    def from_track(self, source_root: str, extension: str, track):
-        basename = os.path.basename(source_root)
-        return FusePath(basename, extension, True, track.num, track.title, self)
+    @staticmethod
+    def split_vpath(path):
+        parts = path.strip("/").split("/")
+        if parts == [""] or len(parts) == 0:
+            return ("root",)
+        if len(parts) == 1:
+            return ("album", parts[0])
+        if len(parts) == 2:
+            return ("track", parts[0], parts[1])
+        return ("invalid",)
+
+    def from_track(self, source_root, extension, track):
+        return FusePath(source_root, extension, True, track.num, track.title, self)
 
 
 _DEFAULT_FACTORY = Factory()
@@ -93,8 +102,8 @@ class FusePath:
     source_root: str
     extension: str
     is_track: bool = False
-    num: int = 0
-    title: str = ""
+    num: int = None
+    title: str = None
     _factory: Factory = _DEFAULT_FACTORY
 
     @property
@@ -104,8 +113,14 @@ class FusePath:
     @property
     def max_title_len(self):
         return self._factory.max_title_len
-        #    @property
-        #    def flac_extension(self): return self._factory.album_extension
+
+    @property
+    def flac_extension(self):
+        return self._factory.album_extension
+
+    @property
+    def valid_filename_chars(self):
+        return self._factory.valid_filename_chars
 
     @property
     def track_file_regex(self):
@@ -130,17 +145,21 @@ class FusePath:
     @property
     def title_fragment(self):
         """the fragment of a track's title that goes into a vpath"""
-        if not self.title:
+        if self.title is None or len(self.title) == 0:
             return ""
-        clean_title = unicodedata.normalize("NFKD", self.title)[: self.max_title_len]
-        safe = "".join("_" if c in "[]\\/:*?%&$'`\"<>|+ 　" else c for c in clean_title)
-        return "." + safe  # 禁則文字とスペースを置換
+        else:
+            clean_title = unicodedata.normalize("NFKD", self.title)[
+                : self.max_title_len
+            ]
+            return "." + "".join(
+                "_" if c in "[]\\/:*?%&$'`\"<>|+" else c for c in clean_title
+            )
 
     @property
     def vpath(self):
         if self.is_track:
             return (
-                f"{self.source_root}{self.track_separator}{self.num:02d}"
+                f"{self.source_root}/{self.num:03d}"
                 f"{self.title_fragment}{self.track_extension}"
             )
         else:
@@ -157,9 +176,7 @@ class FusePath:
             if os.path.isfile(filepath) and self.album_ext_regex.fullmatch(extension):
                 trx = albuminfo.get(filepath).tracks()
                 if len(trx) > 0:
-                    if self.keep_album:
-                        entries.append(filename)
-                    entries.split("/")
+                    entries.append(basename)
                     for t in trx:
                         entries.append(
                             self._factory.from_track(basename, extension, t).vpath

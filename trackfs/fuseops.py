@@ -14,6 +14,7 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import os
+import stat
 from collections import defaultdict
 from dataclasses import dataclass
 from threading import RLock
@@ -63,8 +64,30 @@ class TrackFSOps(Operations):
 
     def getattr(self, path, fh=None):
         log.info(f"getattr for ({path}) [{fh}]")
+        vpath = os.path.relpath(path, self.root)
+        parts = self._fusepath_factory.split_vpath(vpath)
+        # 仮想アルバムディレクトリ
+        if parts[0] == "album":
+            album = parts[1]
+            realfile = os.path.join(self.root, album + ".flac")
+            if os.path.exists(realfile):
+                st = os.lstat(realfile)
+
+                result = dict(
+                    (key, getattr(st, key))
+                    for key in (
+                        "st_atime",
+                        "st_ctime",
+                        "st_gid",
+                        "st_mtime",
+                        "st_nlink",
+                        "st_uid",
+                    )
+                )
+                result["st_mode"] = stat.S_IFDIR | 0o755
+                result["st_size"] = 4096
+                return result
         fp = self._fusepath(path)
-        log.debug(fp)
         st = os.lstat(fp.source)
         result = dict(
             (key, getattr(st, key))
@@ -79,18 +102,9 @@ class TrackFSOps(Operations):
                 "st_uid",
             )
         )
-
         if fp.is_track:
-            # If it's one of the FlacTrackFS track paths,
-            # we need to adjust the file size to be roughly
-            # appropriate for the individual track.
             result["st_size"] = self.tracks.estimate_track_file_size(path, fp)
-
         return result
-
-    getxattr = None
-
-    listxattr = None
 
     def open(self, path, flags, *args, **pargs):
         log.info(f'open file "{path}"')
@@ -133,7 +147,7 @@ class TrackFSOps(Operations):
 
     def readdir(self, path, fh):
         log.info(f"readdir [{fh}] ({path})")
-        return self._fusepath(path).readdir()
+        return self._fusepath_factory.split_vpath(os.path.relpath(path, self.root))
 
     def readlink(self, path, *args, **pargs):
         log.info(f"readlink ({path})")
