@@ -22,6 +22,21 @@ import (
 // Simple FUSE prototype exposing a single album as a directory with per-track files
 
 func main() {
+	// Allow flags anywhere (move --length and its value to front)
+	args := os.Args[1:]
+	flagsFront := make([]string, 0)
+	others := make([]string, 0)
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--length" && i+1 < len(args) {
+			flagsFront = append(flagsFront, args[i], args[i+1])
+			i++
+		} else {
+			others = append(others, args[i])
+		}
+	}
+	newArgs := append(flagsFront, others...)
+	os.Args = append([]string{os.Args[0]}, newArgs...)
+
 	flag.Usage = func() { fmt.Fprintf(os.Stderr, "usage: poc-fuse [--length N] <source.flac> <mountpoint>\n") }
 	maxLen := flag.Int("length", 0, "max title length in characters (0 = no limit)")
 	flag.Parse()
