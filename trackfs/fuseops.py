@@ -111,8 +111,9 @@ class TrackFSOps(Operations):
                 fp = self._fusepath(path)
                 if fp.is_track:
                     self.tracks.check_next_track(path, fp, offset)
-            open_file_info.position = offset + size
-            return os.read(fh, size)
+            data = os.read(fh, size)
+            open_file_info.position = offset + len(data)
+            return data
 
     def release(self, path, fh):
         log.info(f'release [{fh}] ({path})')
