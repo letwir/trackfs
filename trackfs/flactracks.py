@@ -173,7 +173,15 @@ class TrackManager:
         rc = run(metaflac_cmd, shell=True, stdout=None, stderr=DEVNULL).returncode
         picture_arg = ""
         if rc == 0:
-            picture_arg = f' --picture="{picture_file}"'
+            # The temporary file has no extension, so flac 1.5.0 cannot infer
+            # its MIME type from the path. Pass the MIME type from the source
+            # FLAC explicitly using flac's pipe-delimited picture syntax.
+            pictures = getattr(album_info.meta, "pictures", [])
+            picture_mime = pictures[0].mime if pictures else None
+            if picture_mime:
+                picture_arg = f' --picture="|{picture_mime}|||{picture_file}"'
+            else:
+                log.warning(f'could not determine embedded picture MIME type for "{fp.source}"')
         else:
             local_album_art = self._find_albmum_art(fp)
             if local_album_art:
