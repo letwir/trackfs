@@ -177,9 +177,15 @@ class TrackManager:
             # its MIME type from the path. Pass the MIME type from the source
             # FLAC explicitly using flac's pipe-delimited picture syntax.
             pictures = getattr(album_info.meta, "pictures", [])
-            picture_mime = pictures[0].mime if pictures else None
-            if picture_mime:
-                picture_arg = f' --picture="|{picture_mime}|||{picture_file}"'
+            picture = pictures[0] if pictures else None
+            if picture is not None:
+                picture_info = (
+                    f"{picture.width}x{picture.height}x{picture.depth}/{picture.colors}"
+                )
+                picture_arg = (
+                    f' --picture="|{picture.mime}|{picture.desc}|'
+                    f'{picture_info}|{picture_file}"'
+                )
             else:
                 log.warning(f'could not determine embedded picture MIME type for "{fp.source}"')
         else:
