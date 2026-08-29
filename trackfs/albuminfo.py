@@ -57,8 +57,8 @@ class AlbumInfo:
             cue_bytes = fh.read()
         try:
             cue_str = cue_bytes.decode(chardet.detect(cue_bytes)['encoding'])
-        except:
-            log.warning(f'could not detect/decoode character set of cue sheet file "{cue_path}"')
+        except (LookupError, UnicodeDecodeError, TypeError) as exc:
+            log.warning(f'could not detect/decode character set of cue sheet file "{cue_path}": {exc}')
             return None
         log.debug(f"cue-sheet:\n{cue_str}")
         return cue_str
@@ -77,8 +77,8 @@ class AlbumInfo:
         log.debug(f"raw cue sheet from FLAC file:\n{raw_cue}")
         try:
             result = cuesheet.parse(raw_cue, meta.info.length)
-        except:
-            log.warning(f'could not parse cue sheet; ignore cue sheet')
+        except Exception as exc:
+            log.warning(f'could not parse cue sheet; ignore cue sheet: {exc}')
             return None
         log.debug(f"parsed cue sheet from FLAC file:\n{result}")
         return result
@@ -90,9 +90,6 @@ class AlbumInfo:
         trx = self.tracks()
         if len(trx) == 0:
             return None
-        t = trx[num - 1]
-        if t.num == num:
-            return t
         for t in trx:
             if t.num == num:
                 return t

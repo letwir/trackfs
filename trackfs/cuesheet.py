@@ -144,6 +144,8 @@ class CueSheet:
     totaldiscs: str = None
 
     def calc_track_times(self, disc_duration):
+        if not self.tracks:
+            return self
         for i in range(0, len(self.tracks) - 1):
             curr = self.tracks[i]
             curr.end = self.tracks[i + 1].start
@@ -253,7 +255,7 @@ class Time:
             return cls(*args)
 
     def seconds(self):
-        return (60.0 * self.mm) + self.ss + (self.ff / 100.0)
+        return (60.0 * self.mm) + self.ss + (self.ff / 75.0)
 
     def flac_time(self):
         return f'{self.mm:02d}:{self.ss:02d}.{int(100.0 / 75.0 * self.ff):02d}'
@@ -267,13 +269,11 @@ class Time:
         return Time(self.mm + other.mm + cm, ss, ff)
 
     def __sub__(self, other):
-        ff = self.ff - other.ff
-        ss = self.ss - other.ss - (0 if ff > 0 else 1)
-        return Time(
-            self.mm - other.mm - (0 if ss > 0 else 1),
-            ss if ss >= 0 else ss + 60,
-            ff if ff >= 0 else ff + 75
-        )
+        total_frames = (self.mm * 60 + self.ss) * 75 + self.ff
+        total_frames -= (other.mm * 60 + other.ss) * 75 + other.ff
+        minutes, remainder = divmod(total_frames, 60 * 75)
+        seconds, frames = divmod(remainder, 75)
+        return Time(minutes, seconds, frames)
 
 
 class _CueTransformer(Transformer):

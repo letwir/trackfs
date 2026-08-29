@@ -13,7 +13,7 @@ import time
 import wave
 import psutil
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from math import trunc
 from tempfile import mkstemp
 from subprocess import DEVNULL, run
@@ -29,7 +29,7 @@ import logging
 
 log = logging.getLogger(__name__)
 # CPU論理コア数の格納。
-cpu_cores = str(psutil.cpu_count())
+cpu_cores = str(max(1, psutil.cpu_count() or 1))
 
 class FlacSplitException(Exception):
     pass
@@ -39,7 +39,7 @@ class FlacSplitException(Exception):
 class TrackInfo:
     temp_file_path: os.PathLike
     ref_count: int = 1
-    last_accessed: float = time.time()
+    last_accessed: float = field(default_factory=time.time)
 
 
 class TrackManager:
@@ -75,16 +75,22 @@ class TrackManager:
             still_in_use = True
             while still_in_use:
                 with self.rwlock:
-                    info = self.registry[key]
+                    info = self.registry.get(key)
+                if info is None:
+                    return
                 if info.ref_count <= 0 and (time.time() - info.last_accessed > self.temp_file_ttl):
                     still_in_use = False
                 else:
                     time.sleep(self.temp_file_ttl / 2)
             log.debug(f'delete track "{key}"')
-            del self.registry[key]
-            os.remove(info.temp_file_path)
+            with self.rwlock:
+                self.registry.pop(key, None)
+            try:
+                os.remove(info.temp_file_path)
+            except FileNotFoundError:
+                pass
 
-        Thread(target=cleanup).start()
+        Thread(target=cleanup, daemon=True).start()
 
     def _is_unregistered(self, key: os.PathLike) -> bool:
         """Is the track at the given key not yet registered?"""
@@ -110,7 +116,7 @@ class TrackManager:
     def _change_usage(self, key: os.PathLike, delta: int) -> TrackInfo:
         with self.rwlock:
             info = self.registry[key]
-            info = TrackInfo(info.temp_file_path, info.ref_count + delta)
+            info = TrackInfo(info.temp_file_path, info.ref_count + delta, time.time())
             self.registry[key] = info
         return info
 
@@ -149,10 +155,10 @@ class TrackManager:
         return temp_file
 
     @staticmethod
-    def _find_albmum_art(fp: FusePath) -> Optional[os.PathLike]:
+    def _find_album_art(fp: FusePath) -> Optional[os.PathLike]:
         for fn in [
             fp.source_root+".jpg",
-            os.path.dirname(fp.source_root)+'folder.jpg'
+            os.path.join(os.path.dirname(fp.source_root), 'folder.jpg')
         ]:
             if os.path.exists(fn): return fn
         return None
@@ -189,7 +195,7 @@ class TrackManager:
             else:
                 log.warning(f'could not determine embedded picture MIME type for "{fp.source}"')
         else:
-            local_album_art = self._find_albmum_art(fp)
+            local_album_art = self._find_album_art(fp)
             if local_album_art:
                 picture_arg = f' --picture="{local_album_art}"'
 
@@ -231,7 +237,7 @@ class TrackManager:
         track = album_info.track(fp.num)
 
         # search for album-art in same directory
-        local_album_art = self._find_albmum_art(fp)
+        local_album_art = self._find_album_art(fp)
         if local_album_art:
             picture_arg = f' --picture="{local_album_art}"'
         else:
@@ -248,8 +254,9 @@ class TrackManager:
                 wav_out.setparams(out_params)
                 chunk_size = 512*1025
                 while nframes > 0:
-                    wav_out.writeframes(wav_in.readframes(min(nframes, chunk_size)))
-                    nframes -= chunk_size
+                    frames = min(nframes, chunk_size)
+                    wav_out.writeframes(wav_in.readframes(frames))
+                    nframes -= frames
 
         flac_cmd = (
             f'flac -sf0j {cpu_cores}'
@@ -313,15 +320,10 @@ class TrackManager:
         log.info(f'checking for subsequent track of track "{num}"')
         tracks = album_info.tracks()
         if tracks is not None:
-            total_tracks = len(tracks)
-            track = None
-            found = False
-            i = num - 1
-            while (not found) and (i < total_tracks):
-                track = tracks[i]
-                found = track.num == num
-                i += 1
-            return track, tracks[i] if i < total_tracks else None
+            for index, track in enumerate(tracks):
+                if track.num == num:
+                    return track, tracks[index + 1] if index + 1 < len(tracks) else None
+            return None, None
         else:
             log.warning('could not find any tracks')
             return None, None
@@ -336,7 +338,10 @@ class TrackManager:
             return
 
         file_size = os.stat(self[path].temp_file_path).st_size
-        if (1.0 - (float(offset) / float(file_size))) * track.duration > self.preload_lead_time:
+        if track is None or file_size <= 0:
+            return
+        remaining_seconds = (1.0 - (float(offset) / float(file_size))) * track.duration.seconds()
+        if remaining_seconds > self.preload_lead_time:
             log.debug(f'more than ~{self.preload_lead_time} seconds to play; no preload')
             return
 
@@ -369,17 +374,17 @@ class TrackManager:
     def estimate_track_file_size(self, path: os.PathLike, fp: FusePath) -> int:
         track_info = self.get(path, None)
         if track_info is None:
-            # TODO: can we find a better estimation?
-            # use raw-audio size as estimation
+            # Metadata clients stat a virtual track before opening it.  Raw
+            # PCM size is a poor estimate for a compressed FLAC and can make
+            # range readers request beyond the eventual file end.  Use the
+            # source FLAC's compressed size distributed by duration instead.
             album_info = albuminfo.get(fp.source)
             meta = album_info.meta
             track = album_info.track(fp.num)
-            return int(
-                (track.end - track.start).seconds()
-                * meta.info.channels
-                * (meta.info.bits_per_sample / 8)
-                * meta.info.sample_rate
-            )
+            if track is None or not meta.info.length:
+                return os.stat(fp.source).st_size
+            duration_ratio = (track.end - track.start).seconds() / meta.info.length
+            return max(1, int(os.stat(fp.source).st_size * duration_ratio))
         else:
             # use the actual size of the track-file
             return os.stat(track_info.temp_file_path).st_size

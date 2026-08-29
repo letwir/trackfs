@@ -9,9 +9,6 @@
 
 from __future__ import print_function, absolute_import, division
 
-from .fuseops import TrackFSOps
-
-
 def main(foreground=True, allow_other=True):
     import os
     import sys
@@ -19,6 +16,7 @@ def main(foreground=True, allow_other=True):
 
     from fuse import FUSE
     from . import fusepath
+    from .fuseops import TrackFSOps
 
     import logging
     log = logging.getLogger(__name__)
