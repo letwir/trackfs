@@ -51,7 +51,7 @@ class Factory:
         track_extension_rex = re.escape(self.track_extension)
         flac_cue_rex = (
             '^(?P<basename>.*)(?P<extension>'+self.album_extension+')'+separator_rex
-            + '(?P<num>\\d+)(?P<title>(\\.[^\\.]{,'+str(self.max_title_len)
+            + '(?P<num>\\d+)(?P<title>(\\.[^/]{,'+str(self.max_title_len)
             + '}?)?)'+track_extension_rex+'$'
         )
         log.debug("Factory.track_file_regex: "+flac_cue_rex)
