@@ -1,0 +1,37 @@
+{
+  "name": "trackfs Development",
+  "build": {
+    "dockerfile": "../Dockerfile.dev",
+    "context": ".."
+  },
+  "workspaceMount": "source=${localWorkspaceFolder},target=/work,type=bind,consistency=cached",
+  "workspaceFolder": "/work",
+  "mounts": [
+    // "source=<path-to-src>,target=/src,type=bind,consistency=cached",
+    // "source=<path-to-dst>,target=/dst,type=bind,consistency=consistent,bind-propagation=rshared"
+  ],
+  "runArgs": [
+    "--privileged",
+    "--entrypoint=/bin/sh"
+  ],
+  "overrideCommand": true,
+  "containerEnv": {
+    "FUSE_LIBRARY_PATH": "/usr/lib/libfuse.so",
+    "PYTHONPYCACHEPREFIX": "/tmp/__pycache__",
+    "VIRTUAL_ENV": "/work/.venv"
+  },
+  "remoteEnv": {
+    "PATH": "/work/.venv/bin:${containerEnv:PATH}"
+  },
+  "postCreateCommand": "virtualenv --clear /work/.venv && /work/.venv/bin/python -m pip install --upgrade pip && /work/.venv/bin/python -m pip install -e . && /work/.venv/bin/python -m unittest discover -s tests -v",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/work/.venv/bin/python"
+      }
+    }
+  }
+}

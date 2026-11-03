@@ -250,9 +250,10 @@ class Time:
             assert len(ts) == 6
             return cls(int(ts[0:2]), int(ts[2:4]), int(ts[4:6]))
         elif isinstance(args[0], int):
-            # value is three ints: mm, ss, ff
-            assert len(args) == 3
-            return cls(*args)
+            if len(args) == 3:
+                return cls(*args)
+            # Some audio backends expose the duration as one integer.
+            return cls.create(float(args[0]))
 
     def seconds(self):
         return (60.0 * self.mm) + self.ss + (self.ff / 75.0)

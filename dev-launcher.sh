@@ -12,21 +12,20 @@ export FUSE_LIBRARY_PATH=/usr/lib/libfuse.so
 # make sure that python doesn't write into the mounted working directory
 export PYTHONPYCACHEPREFIX=/tmp/__pycache__
 
-# prepare the dev tools for trackfs 
-ln -s /work/.pypirc ~/.pypirc
+# prepare the dev tools for trackfs
+ln -sf /work/.pypirc ~/.pypirc
 
-# create an isolated environment in ~/dev for the python tooling
-mkdir -p ~/dev
-cd ~/dev
-for file in $(ls /work); do ln -s "/work/${file}" "${file}"; done
-ln -s "/work/.github" ".github"
-pip install -e .
+# prepare the Python virtual environment in the workspace
+if [ ! -x /work/.venv/bin/python ]; then
+    virtualenv --clear /work/.venv
+fi
+export VIRTUAL_ENV=/work/.venv
+export PATH="/work/.venv/bin:${PATH}"
+
+# install the project into the virtual environment
+/work/.venv/bin/python -m pip install -e /work
 
 # launch sub-shell
 export ENV=/work/tools.sh
 /bin/sh
-
-# cleanup
-pip uninstall --yes trackfs
-
 

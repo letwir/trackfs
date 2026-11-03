@@ -11,4 +11,9 @@ __pycache__/
 # neither should any local development configurations
 /.idea/
 /venv/
+/.venv/
+
 /.cheatsheet
+
+devcontainer-local/
+devcontainer-local.json

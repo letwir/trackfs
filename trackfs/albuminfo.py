@@ -55,10 +55,19 @@ class AlbumInfo:
         log.debug(f"found accompanying cue sheet")
         with open(cue_path, "rb") as fh:
             cue_bytes = fh.read()
-        try:
-            cue_str = cue_bytes.decode(chardet.detect(cue_bytes)['encoding'])
-        except (LookupError, UnicodeDecodeError, TypeError) as exc:
-            log.warning(f'could not detect/decode character set of cue sheet file "{cue_path}": {exc}')
+        detected = chardet.detect(cue_bytes).get('encoding')
+        encodings = [detected, 'utf-8-sig', 'cp1251', 'utf-16']
+        cue_str = None
+        for encoding in dict.fromkeys(encodings):
+            if not encoding:
+                continue
+            try:
+                cue_str = cue_bytes.decode(encoding)
+                break
+            except (LookupError, UnicodeDecodeError) as exc:
+                continue
+        if cue_str is None:
+            log.warning(f'could not detect/decode character set of cue sheet file "{cue_path}"')
             return None
         log.debug(f"cue-sheet:\n{cue_str}")
         return cue_str
@@ -74,13 +83,13 @@ class AlbumInfo:
                 return None
         else:
             raw_cue = raw_cue[0]
-        log.debug(f"raw cue sheet from FLAC file:\n{raw_cue}")
+            log.debug(f"raw cue sheet from FLAC file:\n{raw_cue}")
         try:
             result = cuesheet.parse(raw_cue, meta.info.length)
         except Exception as exc:
             log.warning(f'could not parse cue sheet; ignore cue sheet: {exc}')
             return None
-        log.debug(f"parsed cue sheet from FLAC file:\n{result}")
+        log.debug(f"parsed cue sheet:\n{result}")
         return result
 
     def tracks(self) -> List[cuesheet.Track]:

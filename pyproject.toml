@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "trackfs"
+version = "0.2.8"
+description = "A read-only FUSE filesystem that splits FLAC+CUE files into individual FLAC files per track"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "mutagen",
+    "fusepy",
+    "Lark",
+    "chardet",
+    "psutil",
+]
