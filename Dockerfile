@@ -9,7 +9,7 @@
 #
 # =================================
 
-FROM docker.io/python:3.8-alpine as builder
+FROM docker.io/python:3.8-alpine AS builder
 
 # build flac1.5.0
 RUN \
@@ -23,6 +23,7 @@ RUN \
   && make -j $(nproc) \
   && make install \
   && cd ../
+
 # install dependencies  
 RUN \
   apk --no-cache add fuse fuse-dev \
@@ -46,13 +47,13 @@ RUN echo "user_allow_other" >> /etc/fuse.conf
 RUN chmod 666 /etc/passwd 
 
 # Ensure that we get a docker image cache invalidation when there's new content available
-ADD https://api.github.com/repos/letwir/trackfs/compare/master...HEAD /dev/null
+# ADD https://api.github.com/repos/letwir/trackfs/compare/master...HEAD /dev/null
 
 # Now install the latest trackfs version from pypi
 RUN \
   apk --no-cache add gcc python3-dev musl-dev linux-headers \
   && pip install psutil \
-  && pip install git+https://github.com/letwir/trackfs/ --break-system-packages
+  && pip install git+https://github.com/apomortsev/trackfs.git@develop --break-system-packages
 
 # Remove build kit
 RUN \
@@ -67,6 +68,8 @@ VOLUME /dst
 COPY launcher.sh /usr/local/bin/
 RUN chmod 555 /usr/local/bin/launcher.sh
 
-ENTRYPOINT ["/usr/local/bin/launcher.sh", "-j $(nproc)", "/src", "/dst"]
+ENTRYPOINT ["/usr/local/bin/launcher.sh"]
+
+CMD ["-t 256", "/src", "/dst"]
 
 

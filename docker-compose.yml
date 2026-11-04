@@ -1,0 +1,33 @@
+name: "trackfs"
+
+services:
+  trackfs:
+    container_name: "trackfs"
+    image: "ghcr.io/apomortsev/trackfs:0.2.8"
+
+    environment:
+      - "PATH=/usr/local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+      - "LANG=C.UTF-8"
+      - "PYTHON_VERSION=3.8.20"
+    
+    user: "500:100"
+    
+    cap_add:
+      - SYS_ADMIN
+    
+    security_opt:
+      - "apparmor:unconfined"
+
+    devices:
+      - "/dev/fuse:/dev/fuse"
+
+    volumes:
+      - "/share/CACHEDEV6_DATA/Multimedia/Music:/src:ro"
+      - "/share/CACHEDEV6_DATA/Multimedia/Trackfs:/dst:rshared"
+    
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 524288
+    
+    network_mode: "none"
