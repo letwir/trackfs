@@ -10,7 +10,7 @@ services:
       - "LANG=C.UTF-8"
       - "PYTHON_VERSION=3.8.20"
     
-    user: "500:100"
+    user: "${UID}:${GID}"
     
     cap_add:
       - SYS_ADMIN
