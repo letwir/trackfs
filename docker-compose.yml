@@ -22,8 +22,8 @@ services:
       - "/dev/fuse:/dev/fuse"
 
     volumes:
-      - "/share/CACHEDEV6_DATA/Multimedia/Music:/src:ro"
-      - "/share/CACHEDEV6_DATA/Multimedia/Trackfs:/dst:rshared"
+      - "${SRC_PATH}:/src:ro"
+      - "${DST_PATH}:/dst:rshared"
     
     ulimits:
       nofile:
