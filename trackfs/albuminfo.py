@@ -55,19 +55,10 @@ class AlbumInfo:
         log.debug(f"found accompanying cue sheet")
         with open(cue_path, "rb") as fh:
             cue_bytes = fh.read()
-        detected = chardet.detect(cue_bytes).get('encoding')
-        encodings = [detected, 'utf-8-sig', 'cp1251', 'utf-16']
-        cue_str = None
-        for encoding in dict.fromkeys(encodings):
-            if not encoding:
-                continue
-            try:
-                cue_str = cue_bytes.decode(encoding)
-                break
-            except (LookupError, UnicodeDecodeError) as exc:
-                continue
-        if cue_str is None:
-            log.warning(f'could not detect/decode character set of cue sheet file "{cue_path}"')
+        try:
+            cue_str = cue_bytes.decode(chardet.detect(cue_bytes)['encoding'])
+        except (LookupError, UnicodeDecodeError, TypeError) as exc:
+            log.warning(f'could not detect/decode character set of cue sheet file "{cue_path}": {exc}')
             return None
         log.debug(f"cue-sheet:\n{cue_str}")
         return cue_str

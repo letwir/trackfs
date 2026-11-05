@@ -136,7 +136,8 @@ class TrackManager:
     def _tag_as_flac_arg(tag_name, tag_value):
         # for whatever weird reason quote has a problem with some values if
         # not casted into str before
-        return f"--tag={shlex.quote(str(tag_name))}={shlex.quote(str(tag_value))}"
+        # embedded tag were found to contain leading/trailing whitespace, so we strip them here too
+        return f"--tag={shlex.quote(str(tag_name).strip())}={shlex.quote(str(tag_value).strip())}"
 
     @staticmethod
     def track_tags_as_flac_args(album_info, num):

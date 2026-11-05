@@ -12,8 +12,21 @@
 #FROM docker.io/python:3.8-alpine as builder
 FROM docker:dind
 
+# build flac1.5.0
 RUN \
-  apk add --no-cache python3 python3-dev py3-pip py3-virtualenv gcc musl-dev libffi-dev openssl-dev fuse fuse-dev flac bash curl git
+  apk update \
+  && apk --no-cache add alpine-sdk git cmake doxygen pandoc \
+  && git clone https://github.com/xiph/flac.git -b 1.5.0 \
+  && cd flac \
+  && git clone https://github.com/xiph/ogg.git \
+  && echo -e "\ntarget_link_libraries(replaygain_analysis m)" >> src/share/replaygain_analysis/CMakeLists.txt \
+  && cmake . \
+  && make -j $(nproc) \
+  && make install \
+  && cd ../
+
+RUN \
+  apk add --no-cache python3 python3-dev py3-pip py3-virtualenv gcc musl-dev libffi-dev openssl-dev fuse fuse-dev bash curl
 
 RUN \
   python3 -m pip install --break-system-packages --upgrade pip \
