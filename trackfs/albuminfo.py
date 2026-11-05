@@ -130,7 +130,7 @@ class AlbumInfo:
 
         if 'TRACKTOTAL' not in tags:
             tags['TRACKTOTAL'] = [str(len(self.tracks()))]
-        if 'COMPOSER' not in tags:
+        if 'COMPOSER' not in tags and 'ARTIST' in tags:
             tags['COMPOSER'] = tags['ARTIST']
         return tags
 
