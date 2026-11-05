@@ -27,24 +27,23 @@ from . import albuminfo
 import logging
 log = logging.getLogger(__name__)
 
-DEFAULT_TRACK_SEPARATOR: str = '.#-#.'
-DEFAULT_MAX_TITLE_LEN: int = 20
-DEFAULT_ALBUM_EXTENSION: str = '(?i:\\.flac|\\.wav)'
-DEFAULT_VALID_CHARS: str = "-_() " + string.ascii_letters + string.digits
-DEFAULT_KEEP_ALBUM: bool = False
-DEFAULT_TRACK_EXTENSION: str = '.flac'
-
+DEFAULT_TRACK_SEPARATOR     : str   = '.#-#.'
+DEFAULT_MAX_TITLE_LEN       : int   = 20
+DEFAULT_ALBUM_EXTENSION     : str   = '(?i:\\.flac|\\.wav)'
+DEFAULT_VALID_CHARS         : str   = "-_() " + string.ascii_letters + string.digits
+DEFAULT_KEEP_ALBUM          : bool  = False
+DEFAULT_TRACK_EXTENSION     : str   = '.flac'
 
 @dataclass(frozen=True)
 class Factory:
     '''manages the configuration options for the virtual fuse paths'''
 
-    track_separator: str = DEFAULT_TRACK_SEPARATOR
-    max_title_len: int = DEFAULT_MAX_TITLE_LEN
-    album_extension: str = DEFAULT_ALBUM_EXTENSION
-    valid_filename_chars: str = DEFAULT_VALID_CHARS
-    keep_album: bool = DEFAULT_KEEP_ALBUM
-    track_extension: str = DEFAULT_TRACK_EXTENSION
+    track_separator         : str   = DEFAULT_TRACK_SEPARATOR
+    max_title_len           : int   = DEFAULT_MAX_TITLE_LEN
+    album_extension         : str   = DEFAULT_ALBUM_EXTENSION
+    valid_filename_chars    : str   = DEFAULT_VALID_CHARS
+    keep_album              : bool  = DEFAULT_KEEP_ALBUM
+    track_extension         : str   = DEFAULT_TRACK_EXTENSION
 
     @cached_property
     def track_file_regex(self):
@@ -82,19 +81,17 @@ class Factory:
             track.num, track.title, self
         )
 
-
 _DEFAULT_FACTORY = Factory()
-
 
 @dataclass(frozen=True)
 class FusePath:
     ''' represents an entry in the virtual trackfs filesystem'''
-    source_root: str
-    extension: str
-    is_track: bool = False
-    num: int = None
-    title: str = None
-    _factory: Factory = _DEFAULT_FACTORY
+    source_root             : str
+    extension               : str
+    is_track                : bool          = False
+    num                     : int           = None
+    title                   : str           = None
+    _factory                : Factory       = _DEFAULT_FACTORY
 
     @property
     def track_separator(self): return self._factory.track_separator
@@ -123,13 +120,12 @@ class FusePath:
         if self.title is None or len(self.title) == 0:
             return ""
         else:
-            clean_title = unicodedata.normalize('NFC', self.title)[
-                :self.max_title_len]
+            clean_title = unicodedata.normalize('NFC', self.title)[:self.max_title_len]
             return "."+''.join("_" if c in '[]\\/:*?%&$\'`"<>|+' else c for c in clean_title)
 
     @property
     def vpath(self):
-        if (self.is_track):
+        if(self.is_track):
             return (
                 f'{self.source_root}{self.extension}{self.track_separator}{self.num:03d}'
                 f'{self.title_fragment}{self.track_extension}'
@@ -152,8 +148,7 @@ class FusePath:
                         entries.append(filename)
                     for t in trx:
                         entries.append(
-                            self._factory.from_track(
-                                basename, extension, t).vpath
+                            self._factory.from_track(basename, extension, t).vpath
                         )
                 else:
                     entries.append(filename)
